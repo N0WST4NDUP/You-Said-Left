@@ -1,0 +1,6 @@
+#!/bin/sh
+# You Said Left RepositoryChecks hook
+
+root=$(git rev-parse --show-toplevel) || exit $?
+cd "$root" || exit $?
+dotnet run --project "$root/tools/RepositoryChecks/RepositoryChecks.csproj" --no-restore -- lint --staged || exit $?

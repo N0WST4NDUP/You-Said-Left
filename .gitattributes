@@ -180,3 +180,6 @@ LightingData.asset     binary
 .gitattributes         text eol=lf
 .gitignore             text eol=lf
 .gitmessage            text eol=lf
+tools/hooks/*          text eol=lf
+tools/*.ps1            text eol=lf
+tools/**/*.csproj      text eol=lf

@@ -1,0 +1,10 @@
+#!/bin/sh
+# You Said Left RepositoryChecks hook
+
+if [ "$#" -ne 1 ]; then
+    printf '%s\n' 'commit-msg requires a message file.' >&2
+    exit 2
+fi
+root=$(git rev-parse --show-toplevel) || exit $?
+cd "$root" || exit $?
+dotnet run --project "$root/tools/RepositoryChecks/RepositoryChecks.csproj" --no-restore -- commit --file "$1" || exit $?

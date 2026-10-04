@@ -1,0 +1,51 @@
+name: Repository checks
+
+on:
+  pull_request:
+  push:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: repository-checks
+    if: github.event_name != 'push' || github.event.deleted != true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+
+      - name: Restore locked dependencies
+        run: dotnet restore tools/RepositoryChecks.Tests --locked-mode
+
+      - name: Test repository checks
+        run: dotnet test tools/RepositoryChecks.Tests --no-restore
+
+      - name: Lint all owned C# files
+        run: dotnet run --project tools/RepositoryChecks --no-restore -- lint --all
+
+      - name: Check new commit messages
+        env:
+          CHECK_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          CHECK_HEAD: ${{ github.event.pull_request.head.sha || github.event.after }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$CHECK_BASE" || "$CHECK_BASE" =~ ^0+$ ]]; then
+            CHECK_BASE=064156e824b71f0e744ebaaa279e6b45e9cfff6c
+          fi
+          if [[ ! "$CHECK_BASE" =~ ^[0-9a-f]{40}$ || ! "$CHECK_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+            printf '%s\n' 'Commit range endpoints must be Git commit SHAs.' >&2
+            exit 2
+          fi
+          if ! git cat-file -e "$CHECK_BASE^{commit}"; then
+            git fetch --no-tags origin "$CHECK_BASE"
+          fi
+          dotnet run --project tools/RepositoryChecks --no-restore -- commit --range "$CHECK_BASE..$CHECK_HEAD"
