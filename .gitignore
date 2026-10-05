@@ -121,3 +121,6 @@ InitTestScene*.unity*
 /tools/**/bin/
 /tools/**/obj/
 /tools/**/TestResults/
+
+Imported/
+Imported.meta
