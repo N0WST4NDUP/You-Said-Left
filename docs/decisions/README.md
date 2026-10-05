@@ -6,7 +6,10 @@ You Said Left의 기술·설계 결정과 그 근거를 기록한다. 각 문서
 
 | 번호 | 제목 | 상태 | 결정일 |
 |---|---|---|---|
-| — | 아직 작성된 ADR 없음 | — | — |
+| [ADR-001](ADR-001-blueprint-as-source-of-truth.md) | 청사진 데이터를 원본으로 3D 도시와 종이 지도를 만든다 | `Accepted` | 2026-10-05 |
+| [ADR-002](ADR-002-grid-generation-with-modular-tiles.md) | 랜덤 도시를 격자 위에서 생성하고 Low Poly Epic City 타일로 조립한다 | `Accepted` | 2026-10-05 |
+| [ADR-003](ADR-003-trait-selection-before-random-levels.md) | 랜덤 레벨 출발 전에 특성을 고르고, 특성 점수 합이 0 이하일 때만 출발한다 | `Proposed` | — |
+| [ADR-004](ADR-004-roles-by-boarding-seat.md) | 역할은 시스템이 배정하지 않고 탑승한 좌석으로 정한다 | `Proposed` | — |
 
 새 ADR을 추가하면 이 표에 한 줄을 추가한다. 번호 오름차순으로 정렬한다.
 
