@@ -4,7 +4,8 @@
 
 - Unity 버전: `ProjectSettings/ProjectVersion.txt` 기준
 - 검사 도구: Git, .NET SDK 10.0.400 (`global.json` 기준)
-- 자체 제작 에셋과 코드는 `Assets/YouSaidLeft/` 아래에 필요한 만큼 추가한다.
+- 자체 제작 코드는 `Assets/Scripts/` 아래에 추가한다.
+- 자체 제작 에셋은 `Assets/YouSaidLeft/` 아래에 필요한 만큼 추가한다.
 
 ## 저장소 검사
 
@@ -27,7 +28,7 @@ dotnet run --project tools/RepositoryChecks --no-restore -- commit --file <file>
 dotnet run --project tools/RepositoryChecks --no-restore -- commit --range <base>..<head>
 ```
 
-`<file>`, `<base>`, `<head>`는 실제 메시지 파일 경로와 Git 참조로 바꾼다. `lint --staged`는 스테이징된 내용만 검사한다. C# 검사 범위는 `Assets/YouSaidLeft/**/*.cs`이며, 검사 규칙은 [CodeRules.cs](../../tools/RepositoryChecks/CodeRules.cs)에 있다. 현재 이 범위에는 C# 파일이 0개다.
+`<file>`, `<base>`, `<head>`는 실제 메시지 파일 경로와 Git 참조로 바꾼다. `lint --staged`는 스테이징된 내용만 검사한다. C# 검사 범위는 `Assets/Scripts/**/*.cs`이며, 검사 규칙은 [CodeRules.cs](../../tools/RepositoryChecks/CodeRules.cs)에 있다. 현재 이 범위에는 C# 파일이 0개다.
 
 커밋 메시지 규칙은 [CommitRules.cs](../../tools/RepositoryChecks/CommitRules.cs), 작성 예시는 [.gitmessage](../../.gitmessage)를 참고한다. CI에서도 검사 도구 테스트, 전체 C# 검사, 새 커밋 메시지 검사를 실행한다. 기존 커밋은 기준 커밋 `064156e824b71f0e744ebaaa279e6b45e9cfff6c`까지 검사에서 제외한다.
 

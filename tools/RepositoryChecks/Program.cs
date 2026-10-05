@@ -24,7 +24,7 @@ public static class Program
                 var files = snapshot?.Files ?? git.ReadWorkingCode();
                 if (files.Count == 0)
                 {
-                    Console.WriteLine("검사 대상 0개 (Assets/YouSaidLeft/**/*.cs).");
+                    Console.WriteLine("검사 대상 0개 (Assets/Scripts/**/*.cs).");
                     return 0;
                 }
                 var diagnostics = files.SelectMany(file => CodeRules.Analyze(file.Content, file.Path)).ToArray();
@@ -84,8 +84,8 @@ public static class Program
     {
         using var scratch = GitInputs.CreateScratch(workspace, "format");
         var reportRoot = scratch.Root;
-        var sourceRoot = Path.Combine(workspace, "Assets", "YouSaidLeft");
-        var includes = files.Select(file => file.Path["Assets/YouSaidLeft/".Length..]).ToArray();
+        var sourceRoot = Path.Combine(workspace, "Assets", "Scripts");
+        var includes = files.Select(file => file.Path["Assets/Scripts/".Length..]).ToArray();
         var locations = new Dictionary<string, (string Path, int Offset)>(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         foreach (var file in files) { locations.Add(GitInputs.SafePath(workspace, file.Path), (GitInputs.SafePath(repositoryRoot, file.Path), 0)); }
         if (RunFormatting(workspace, sourceRoot, includes, Path.Combine(reportRoot, "base.json"), locations) != 0) { return 1; }

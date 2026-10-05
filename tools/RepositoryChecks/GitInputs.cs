@@ -18,7 +18,7 @@ public sealed class GitInputs(string root)
 
     public IReadOnlyList<SourceFile> ReadWorkingCode()
     {
-        var paths = Git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "Assets/YouSaidLeft")
+        var paths = Git("ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "Assets/Scripts")
             .Text.Split('\0', StringSplitOptions.RemoveEmptyEntries).Where(IsOwnedCode).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
         var sources = new List<SourceFile>();
         foreach (var path in paths)
@@ -109,9 +109,9 @@ public sealed class GitInputs(string root)
     }
 
     private ProcessResult Git(params string[] arguments) => ProcessRunner.Run("git", Root, arguments).EnsureSuccess();
-    private static bool IsOwnedCode(string path) => path.StartsWith("Assets/YouSaidLeft/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal);
-    private static bool IsApplicableConfiguration(string path) => path is ".editorconfig" or "Assets/.editorconfig" or "Assets/YouSaidLeft/.editorconfig" ||
-        path.StartsWith("Assets/YouSaidLeft/", StringComparison.Ordinal) && path.EndsWith("/.editorconfig", StringComparison.Ordinal);
+    private static bool IsOwnedCode(string path) => path.StartsWith("Assets/Scripts/", StringComparison.Ordinal) && path.EndsWith(".cs", StringComparison.Ordinal);
+    private static bool IsApplicableConfiguration(string path) => path is ".editorconfig" or "Assets/.editorconfig" or "Assets/Scripts/.editorconfig" ||
+        path.StartsWith("Assets/Scripts/", StringComparison.Ordinal) && path.EndsWith("/.editorconfig", StringComparison.Ordinal);
 
     internal static StagedSnapshot CreateScratch(string workspace, string name, IReadOnlyList<SourceFile>? files = null)
     {

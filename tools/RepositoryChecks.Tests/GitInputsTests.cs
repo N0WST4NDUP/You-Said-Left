@@ -11,32 +11,32 @@ public sealed class GitInputsTests
     {
         using var repository = new TestRepository();
         repository.Write(".editorconfig", "root = true\n[*.cs]\nindent_size = 4\n");
-        repository.Write("Assets/YouSaidLeft/Vehicle.cs", "staged source\n");
-        repository.Git("add", ".editorconfig", "Assets/YouSaidLeft/Vehicle.cs");
-        repository.Write("Assets/YouSaidLeft/Vehicle.cs", "unstaged source\n");
+        repository.Write("Assets/Scripts/Vehicle.cs", "staged source\n");
+        repository.Git("add", ".editorconfig", "Assets/Scripts/Vehicle.cs");
+        repository.Write("Assets/Scripts/Vehicle.cs", "unstaged source\n");
         repository.Write(".editorconfig", "root = true\n[*.cs]\nindent_size = 2\n");
 
         using var snapshot = new GitInputs(repository.Root).ReadStagedCode();
 
         var source = Assert.Single(snapshot.Files);
-        Assert.Equal("Assets/YouSaidLeft/Vehicle.cs", source.Path);
+        Assert.Equal("Assets/Scripts/Vehicle.cs", source.Path);
         Assert.Equal("staged source\n", source.Content);
         Assert.Contains("indent_size = 4", File.ReadAllText(Path.Combine(snapshot.Root, ".editorconfig")));
-        Assert.Equal("unstaged source\n", repository.Read("Assets/YouSaidLeft/Vehicle.cs"));
+        Assert.Equal("unstaged source\n", repository.Read("Assets/Scripts/Vehicle.cs"));
     }
 
     [Fact]
     public void WorkingCodeIncludesUntrackedOwnedSourceAndExcludesThirdPartySource()
     {
         using var repository = new TestRepository();
-        repository.Write("Assets/YouSaidLeft/차량 파일.cs", "owned source\n");
+        repository.Write("Assets/Scripts/차량 파일.cs", "owned source\n");
         repository.Write("Assets/TutorialInfo/External.cs", "external source\n");
-        repository.Write("Assets/YouSaidLeft/Generated.cs", "ignored source\n");
+        repository.Write("Assets/Scripts/Generated.cs", "ignored source\n");
         repository.Write(".gitignore", "Generated.cs\n");
 
         var sources = new GitInputs(repository.Root).ReadWorkingCode();
 
-        Assert.Equal("Assets/YouSaidLeft/차량 파일.cs", Assert.Single(sources).Path);
+        Assert.Equal("Assets/Scripts/차량 파일.cs", Assert.Single(sources).Path);
     }
 
     [Fact]
@@ -44,28 +44,28 @@ public sealed class GitInputsTests
     {
         using var repository = new TestRepository();
         repository.Write(".editorconfig", "root = true\n");
-        repository.Write("Assets/YouSaidLeft/Vehicle.cs", "source\n");
-        repository.Write("Assets/YouSaidLeft/Removed.cs", "removed\n");
+        repository.Write("Assets/Scripts/Vehicle.cs", "source\n");
+        repository.Write("Assets/Scripts/Removed.cs", "removed\n");
         repository.Git("add", ".");
-        repository.Git("rm", "-f", "Assets/YouSaidLeft/Removed.cs");
+        repository.Git("rm", "-f", "Assets/Scripts/Removed.cs");
 
         using var snapshot = new GitInputs(repository.Root).ReadStagedCode();
 
-        Assert.Equal("Assets/YouSaidLeft/Vehicle.cs", Assert.Single(snapshot.Files).Path);
+        Assert.Equal("Assets/Scripts/Vehicle.cs", Assert.Single(snapshot.Files).Path);
     }
 
     [Fact]
     public void SnapshotDisposalRemovesOnlyOwnedTemporaryDirectory()
     {
         using var repository = new TestRepository();
-        repository.Write("Assets/YouSaidLeft/Vehicle.cs", "source\n");
+        repository.Write("Assets/Scripts/Vehicle.cs", "source\n");
         repository.Git("add", ".");
         var snapshot = new GitInputs(repository.Root).ReadStagedCode();
         var temporaryRoot = snapshot.Root;
         snapshot.Dispose();
 
         Assert.False(Directory.Exists(temporaryRoot));
-        Assert.True(File.Exists(Path.Combine(repository.Root, "Assets/YouSaidLeft/Vehicle.cs")));
+        Assert.True(File.Exists(Path.Combine(repository.Root, "Assets/Scripts/Vehicle.cs")));
     }
 
     [Theory]
@@ -74,20 +74,20 @@ public sealed class GitInputsTests
     public void NestedConfigurationOnlyChangesOrDeletionRecheckIndexedCode(bool deleted)
     {
         using var repository = new TestRepository();
-        repository.Write("Assets/YouSaidLeft/.editorconfig", "[*.cs]\nindent_size = 4\n");
-        repository.Write("Assets/YouSaidLeft/Vehicle.cs", "source\n");
+        repository.Write("Assets/Scripts/.editorconfig", "[*.cs]\nindent_size = 4\n");
+        repository.Write("Assets/Scripts/Vehicle.cs", "source\n");
         repository.CommitFixture("Chore: fixture baseline");
         if (deleted)
         {
-            repository.Git("rm", "Assets/YouSaidLeft/.editorconfig");
+            repository.Git("rm", "Assets/Scripts/.editorconfig");
         }
         else
         {
-            repository.Write("Assets/YouSaidLeft/.editorconfig", "[*.cs]\nindent_size = 2\n");
-            repository.Git("add", "Assets/YouSaidLeft/.editorconfig");
+            repository.Write("Assets/Scripts/.editorconfig", "[*.cs]\nindent_size = 2\n");
+            repository.Git("add", "Assets/Scripts/.editorconfig");
         }
         using var snapshot = new GitInputs(repository.Root).ReadStagedCode();
-        Assert.Equal("Assets/YouSaidLeft/Vehicle.cs", Assert.Single(snapshot.Files).Path);
+        Assert.Equal("Assets/Scripts/Vehicle.cs", Assert.Single(snapshot.Files).Path);
     }
 
     [Fact]
@@ -96,7 +96,7 @@ public sealed class GitInputsTests
         using var repository = new TestRepository();
         repository.Write(".editorconfig", "root = true\n");
         repository.Write("Assets/.editorconfig", "[*.cs]\nindent_size = 2\n");
-        repository.Write("Assets/YouSaidLeft/Vehicle.cs", "source\n");
+        repository.Write("Assets/Scripts/Vehicle.cs", "source\n");
         repository.Git("add", ".");
         using var snapshot = new GitInputs(repository.Root).ReadStagedCode();
         Assert.Contains("indent_size = 2", File.ReadAllText(Path.Combine(snapshot.Root, "Assets/.editorconfig")));

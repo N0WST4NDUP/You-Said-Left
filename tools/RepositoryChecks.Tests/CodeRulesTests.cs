@@ -186,7 +186,7 @@ public sealed class CodeRulesTests
         var source = "namespace YouSaidLeft\n{\n    public class Vehicle\n    {\n        private int speed;\n    }\n}\n";
         var diagnostic = Assert.Single(Analyze(source), item => item.Id == "CODE004");
 
-        Assert.Equal("Assets/YouSaidLeft/Scripts/Vehicle.cs", diagnostic.Path);
+        Assert.Equal("Assets/Scripts/Vehicle.cs", diagnostic.Path);
         Assert.Equal(5, diagnostic.Line);
         Assert.Equal(21, diagnostic.Column);
     }
@@ -271,7 +271,7 @@ public sealed class CodeRulesTests
 
     private static IReadOnlyList<CheckDiagnostic> Analyze(string source)
     {
-        return CodeRules.Analyze(source, "Assets/YouSaidLeft/Scripts/Vehicle.cs");
+        return CodeRules.Analyze(source, "Assets/Scripts/Vehicle.cs");
     }
 
     private static void AssertRule(string source, string id)
