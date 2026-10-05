@@ -5,7 +5,7 @@ namespace RepositoryChecks;
 public static class CommitRules
 {
     private static readonly HashSet<string> Types = ["Feat", "Fix", "Docs", "Refactor", "Test", "Chore"];
-    private static readonly HashSet<string> Scopes = ["core", "vfx", "sfx", "uiux", "docs", "unity", "pkg"];
+    private static readonly HashSet<string> Scopes = ["core", "vfx", "sfx", "uiux", "docs", "adr", "unity", "pkg"];
 
     private static readonly Regex TitlePattern = new(
         @"\A(?<type>[A-Za-z]+)(?:\((?<scope>[^()\s]+)\))?: (?<summary>.*)\z",
@@ -91,7 +91,7 @@ public static class CommitRules
         Group scope = match.Groups["scope"];
         if (scope.Success && !Scopes.Contains(scope.Value))
         {
-            diagnostics.Add(new CheckDiagnostic("COMMIT003", "scope는 core, vfx, sfx, uiux, docs, unity, pkg 중 하나를 사용하거나 생략하세요.", path, titleLine));
+            diagnostics.Add(new CheckDiagnostic("COMMIT003", $"scope는 {string.Join(", ", Scopes)} 중 하나를 사용하거나 생략하세요.", path, titleLine));
         }
 
         string summary = match.Groups["summary"].Value.TrimEnd();
