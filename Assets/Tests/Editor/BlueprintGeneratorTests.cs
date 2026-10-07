@@ -210,5 +210,113 @@ namespace YouSaidLeft.Tests
             Assert.That(blueprint.Width, Is.EqualTo(3));
             Assert.That(blueprint.Height, Is.EqualTo(2));
         }
+
+        [TestCase(0)]
+        [TestCase(2)]
+        [TestCase(5)]
+        public void 생성된_셀의_높이에_기준층과_높이차가_적용된다(int baseLevel)
+        {
+            var generator = new BlueprintGenerator(
+                sampleLevelOffset: (x, y) => 2 + x + 3 * y
+            );
+            var blueprint = generator.CreateBlueprint(width: 3, height: 2, baseLevel: baseLevel);
+
+            // 첫 번째 인덱스는 x, 두 번째 인덱스는 y입니다.
+            var expectedLevels = baseLevel switch
+            {
+                0 => new int[,]
+                {
+                    { 2, 5 },
+                    { 3, 6 },
+                    { 4, 7 },
+                },
+                2 => new int[,]
+                {
+                    { 4, 7 },
+                    { 5, 8 },
+                    { 6, 9 },
+                },
+                5 => new int[,]
+                {
+                    { 7, 10 },
+                    { 8, 11 },
+                    { 9, 12 },
+                },
+                _ => throw new System.ArgumentOutOfRangeException(nameof(baseLevel)),
+            };
+
+            Assert.That(blueprint.BaseLevel, Is.EqualTo(baseLevel));
+
+            for (var y = 0; y < 2; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    var found = blueprint.TryGetCell(x, y, out var cell);
+
+                    Assert.That(found, Is.True);
+                    Assert.That(
+                        cell.Level,
+                        Is.EqualTo(expectedLevels[x, y]),
+                        $"({x}, {y})에 계산한 높이가 적용되지 않았습니다."
+                    );
+                    Assert.That(cell.Kind, Is.EqualTo(TerrainKind.Grass));
+                }
+            }
+        }
+
+        [Test]
+        public void 생성기는_전달받은_높이차_함수를_사용한다()
+        {
+            var generator = new BlueprintGenerator(
+                sampleLevelOffset: (x, y) => 1
+            );
+
+            var blueprint = generator.CreateBlueprint(
+                width: 1,
+                height: 1,
+                baseLevel: 2
+            );
+
+            var found = blueprint.TryGetCell(0, 0, out var cell);
+
+            Assert.That(found, Is.True);
+            Assert.That(cell.Level, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void 기본_생성기는_모든_셀을_기준층_높이로_생성한다()
+        {
+            var generator = new BlueprintGenerator();
+            var blueprint = generator.CreateBlueprint(
+                width: 3,
+                height: 2,
+                baseLevel: 5
+            );
+
+            for (var y = 0; y < 2; y++)
+            {
+                for (var x = 0; x < 3; x++)
+                {
+                    var found = blueprint.TryGetCell(x, y, out var cell);
+
+                    Assert.That(found, Is.True);
+                    Assert.That(
+                        cell.Level,
+                        Is.EqualTo(5),
+                        $"({x}, {y})의 높이가 기준층과 다릅니다."
+                    );
+                }
+            }
+        }
+
+        [Test]
+        public void 높이차_함수가_null이면_예외가_발생한다()
+        {
+            var exception = Assert.Throws<System.ArgumentNullException>(
+                () => new BlueprintGenerator(sampleLevelOffset: null)
+            );
+
+            Assert.That(exception.ParamName, Is.EqualTo("sampleLevelOffset"));
+        }
     }
 }
