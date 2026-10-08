@@ -8,10 +8,10 @@
 
 청사진을 3D 도시와 지도의 공통 원본으로 쓰는 결정은 [ADR-001](../decisions/ADR-001-blueprint-as-source-of-truth.md), 모듈형 타일 조립 방향은 [ADR-002](../decisions/ADR-002-grid-generation-with-modular-tiles.md), 지형 우선 방향은 [ADR-005](../decisions/ADR-005-terrain-first-generation-with-tunnel-caves.md), 입체 도로망의 후속 계약은 [ADR-006](../decisions/ADR-006-separate-terrain-and-grade-separated-road-network.md)에 있다. 이 결정들의 최종 목표와 현재 지형 API를 구분해서 읽는다.
 
-### 현재 지형 격자와 미래 입체 도로망의 경계
+### 현재 지형 격자와 별도 도로망의 경계
 
 - 현재 `TerrainCell[,]`은 수평 좌표마다 바닥 높이 하나를 저장한다. 터널 내부의 빈 공간이나 같은 위치의 여러 도로 높이를 표현하지 않는다.
-- 미래 도로망은 지형과 별도로 도로의 높이·구간·접속점을 가지며, 겹침과 실제 연결을 구분해야 한다. 구체 타입·API·저장 형식은 아직 없다. 이 문서의 C# 시그니처는 현재 구현에만 해당한다.
+- 별도 [RoadNetwork API](road-network.md)에 ID·수평 좌표·도로 높이를 가진 노드와 명시적 양방향 직접 연결의 최소 저장 계약, BFS 도달 여부 조회가 구현되어 있다. 이 객체를 현재 `Blueprint`가 보유하거나 생성하지는 않는다. 도로 형상·포트, 빈 공간과 예약 형식은 아직 없다.
 - `GetNeighborCoordinates`는 도로 탐색의 연결 간선이 아니다. 이웃 좌표와 높이가 같아도 도로가 실제로 이어진다는 뜻은 아니다.
 - `TerrainKind.Water`는 현재 생성기의 지형 분류다. 미래 교량·고가 구간의 통행 가능 여부를 아래 셀의 종류만으로 판정하지 않는다.
 - 도로 그래프의 도달 가능성, 자동 생성의 유효성, 모듈 연결·여유 공간, 실제 차량 주행은 각각 검사한다. 그래프 연결만으로 지형 개구부나 콜라이더가 생성되지는 않는다.
