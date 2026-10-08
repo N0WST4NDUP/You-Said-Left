@@ -5,7 +5,7 @@
 | **Status** | Accepted |
 | **Date** | 2026-10-05 |
 | **Deciders** | n0wst4ndup |
-| **Related** | relates to [ADR-001](ADR-001-blueprint-as-source-of-truth.md), [ADR-003](ADR-003-trait-selection-before-random-levels.md) |
+| **Related** | relates to [ADR-001](ADR-001-blueprint-as-source-of-truth.md), [ADR-003](ADR-003-trait-selection-before-random-levels.md), [ADR-005](ADR-005-terrain-first-generation-with-tunnel-caves.md), [ADR-006](ADR-006-separate-terrain-and-grade-separated-road-network.md) |
 | **미해결 갭** | 3건 (아래 [!MISSING] 블록 참조) |
 
 ## 요약

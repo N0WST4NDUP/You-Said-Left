@@ -10,8 +10,12 @@ You Said Left의 기술·설계 결정과 그 근거를 기록한다. 각 문서
 | [ADR-002](ADR-002-grid-generation-with-modular-tiles.md) | 랜덤 도시를 격자 위에서 생성하고 Low Poly Epic City 타일로 조립한다 | `Accepted` | 2026-10-05 |
 | [ADR-003](ADR-003-trait-selection-before-random-levels.md) | 랜덤 레벨 출발 전에 특성을 고르고, 특성 점수 합이 0 이하일 때만 출발한다 | `Proposed` | — |
 | [ADR-004](ADR-004-roles-by-boarding-seat.md) | 역할은 시스템이 배정하지 않고 탑승한 좌석으로 정한다 | `Proposed` | — |
+| [ADR-005](ADR-005-terrain-first-generation-with-tunnel-caves.md) | 지형을 먼저 생성하고 동굴을 터널 모듈로 표현한다 | `Accepted` | 2026-10-08 |
+| [ADR-006](ADR-006-separate-terrain-and-grade-separated-road-network.md) | 지형과 입체 도로망을 분리하고 주행 가능한 연결을 먼저 정의한다 | `Accepted` | 2026-10-08 |
 
 새 ADR을 추가하면 이 표에 한 줄을 추가한다. 번호 오름차순으로 정렬한다.
+
+현재 구현과 진행 상황은 [Blueprint API](../api/blueprint.md)와 [청사진 작업 현황](../blueprint-progress.md)을 참고한다. ADR-001·002의 구현 전 설명은 결정 당시의 기록이며, 현재 코드 상태를 의미하지 않는다. ADR-005는 두 결정을 유지하면서 지형 생성 순서와 동굴 표현을 구체화하고, ADR-006은 지상·지하·고가 도로의 연결·공간 계약과 계획·조립 순서를 보완한다. 현재 지형 API, 미래 입체 도로망의 요구와 아직 선택하지 않은 생성 기법을 구분해 읽는다.
 
 ## 작성 규칙
 
