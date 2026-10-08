@@ -12,13 +12,16 @@ namespace YouSaidLeft.Core
             _sampleLevelOffset = sampleLevelOffset ?? throw new ArgumentNullException(nameof(sampleLevelOffset));
         }
 
-        public Blueprint CreateBlueprint(int width, int height, int baseLevel = 0)
+        public Blueprint CreateBlueprint(int width, int height, int baseLevel = 0, int? waterLevel = null)
         {
             // 0. 기본 평지 청사진
-            var blueprint = new Blueprint(width, height, baseLevel);
+            var blueprint = new Blueprint(width, height, baseLevel, waterLevel);
 
             // 1. 높이 계산 결과를 모든 셀에 절대 높이로 적용합니다.
             ApplyElevation(blueprint);
+
+            // 2. 물 높이보다 낮은 셀을 물로 변경합니다.
+            ApplyWater(blueprint);
 
             return blueprint;
         }
@@ -33,6 +36,29 @@ namespace YouSaidLeft.Core
                     var level = blueprint.BaseLevel + levelOffset;
                     var cell = new TerrainCell(level);
                     blueprint.TrySetCell(x, y, cell);
+                }
+            }
+        }
+
+        private void ApplyWater(Blueprint blueprint)
+        {
+            if (!blueprint.WaterLevel.HasValue)
+            {
+                return;
+            }
+
+            var waterLevel = blueprint.WaterLevel.Value;
+            for (var y = 0; y < blueprint.Height; y++)
+            {
+                for (var x = 0; x < blueprint.Width; x++)
+                {
+                    if (blueprint.TryGetCell(x, y, out var cell))
+                    {
+                        if (cell.Level < waterLevel)
+                        {
+                            blueprint.TrySetCell(x, y, new TerrainCell(cell.Level, TerrainKind.Water));
+                        }
+                    }
                 }
             }
         }

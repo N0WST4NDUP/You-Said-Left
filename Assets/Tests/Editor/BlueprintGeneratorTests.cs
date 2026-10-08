@@ -1,4 +1,6 @@
+using System.Linq;
 using NUnit.Framework;
+using UnityEngine;
 using YouSaidLeft.Core;
 
 namespace YouSaidLeft.Tests
@@ -194,6 +196,68 @@ namespace YouSaidLeft.Tests
             }
         }
 
+        [Test]
+        public void 모서리에서는_범위_안의_상하좌우_이웃만_반환한다()
+        {
+            var blueprint = new Blueprint(width: 3, height: 2);
+
+            var neighbors = blueprint.GetNeighborCoordinates(0, 0);
+
+            var expected = new[]
+            {
+                new Vector2Int(1, 0),
+                new Vector2Int(0, 1),
+            };
+
+            Assert.That(neighbors, Is.EquivalentTo(expected));
+        }
+
+        [TestCase(3, 3, 1, 1)]
+        [TestCase(3, 2, 2, 1)]
+        [TestCase(1, 1, 0, 0)]
+        public void 위치와_크기에_맞는_이웃_좌표를_반환한다(int width, int height, int x, int y)
+        {
+            var blueprint = new Blueprint(width, height);
+
+            var expected = (width, height, x, y) switch
+            {
+                (3, 3, 1, 1) => new[]
+                {
+                    new Vector2Int(0, 1),
+                    new Vector2Int(2, 1),
+                    new Vector2Int(1, 0),
+                    new Vector2Int(1, 2),
+                },
+                (3, 2, 2, 1) => new[]
+                {
+                    new Vector2Int(1, 1),
+                    new Vector2Int(2, 0),
+                },
+                (1, 1, 0, 0) => System.Array.Empty<Vector2Int>(),
+                _ => throw new System.InvalidOperationException(
+                    "검증용 입력이 정의되지 않았습니다."
+                ),
+            };
+
+            var neighbors = blueprint.GetNeighborCoordinates(x, y);
+
+            Assert.That(neighbors, Is.EquivalentTo(expected));
+        }
+
+        [TestCase(-1, 0, "x")]
+        [TestCase(3, 0, "x")]
+        [TestCase(0, -1, "y")]
+        [TestCase(0, 2, "y")]
+        public void 범위_밖의_이웃_조회는_잘못된_좌표의_예외를_발생시킨다(int x, int y, string expectedParamName)
+        {
+            var blueprint = new Blueprint(width: 3, height: 2);
+
+            var exception = Assert.Throws<System.ArgumentOutOfRangeException>(
+                () => blueprint.GetNeighborCoordinates(x, y).ToArray()
+            );
+
+            Assert.That(exception.ParamName, Is.EqualTo(expectedParamName));
+        }
     }
 
     public class BlueprintGeneratorTests
@@ -317,6 +381,101 @@ namespace YouSaidLeft.Tests
             );
 
             Assert.That(exception.ParamName, Is.EqualTo("sampleLevelOffset"));
+        }
+
+        [Test]
+        public void 수면보다_낮은_셀만_물로_생성하고_바닥_높이는_유지한다()
+        {
+            var generator = new BlueprintGenerator(
+                sampleLevelOffset: (x, y) => x
+            );
+            var blueprint = generator.CreateBlueprint(
+                width: 3,
+                height: 1,
+                baseLevel: 2,
+                waterLevel: 3
+            );
+
+            var expectedLevels = new[] { 2, 3, 4 };
+            var expectedKinds = new[]
+            {
+                TerrainKind.Water,
+                TerrainKind.Grass,
+                TerrainKind.Grass,
+            };
+
+            for (var x = 0; x < 3; x++)
+            {
+                var found = blueprint.TryGetCell(x, 0, out var cell);
+
+                Assert.That(found, Is.True);
+                Assert.That(cell.Level, Is.EqualTo(expectedLevels[x]));
+                Assert.That(
+                    cell.Kind,
+                    Is.EqualTo(expectedKinds[x]),
+                    $"({x}, 0)의 지형 종류가 예상과 다릅니다."
+                );
+            }
+
+            Assert.That(blueprint.WaterLevel, Is.EqualTo(3));
+        }
+
+        [Test]
+        public void 펄린_지형의_물과_육지가_같은_시드로_재현된다()
+        {
+            Blueprint Generate()
+            {
+                var sampler = PerlinLevelSampler.FromSeed(
+                    seed: 12345,
+                    frequency: 0.125f,
+                    maxLevelOffset: 8,
+                    originRange: 256f
+                );
+                var generator = new BlueprintGenerator(
+                    sampleLevelOffset: sampler.Sample
+                );
+
+                return generator.CreateBlueprint(
+                    width: 16,
+                    height: 16,
+                    baseLevel: 2,
+                    waterLevel: 6
+                );
+            }
+
+            var first = Generate();
+            var second = Generate();
+            var hasWater = false;
+            var hasGrass = false;
+
+            Assert.That(first.WaterLevel, Is.EqualTo(6));
+            Assert.That(second.WaterLevel, Is.EqualTo(6));
+
+            for (var y = 0; y < 16; y++)
+            {
+                for (var x = 0; x < 16; x++)
+                {
+                    Assert.That(first.TryGetCell(x, y, out var firstCell), Is.True);
+                    Assert.That(second.TryGetCell(x, y, out var secondCell), Is.True);
+
+                    Assert.That(
+                        secondCell.Level,
+                        Is.EqualTo(firstCell.Level),
+                        $"({x}, {y})의 높이가 재현되지 않았습니다."
+                    );
+                    Assert.That(
+                        secondCell.Kind,
+                        Is.EqualTo(firstCell.Kind),
+                        $"({x}, {y})의 지형 종류가 재현되지 않았습니다."
+                    );
+
+                    hasWater = hasWater || firstCell.Kind == TerrainKind.Water;
+                    hasGrass = hasGrass || firstCell.Kind == TerrainKind.Grass;
+                }
+            }
+
+            Assert.That(hasWater, Is.True, "검증용 지형에 물이 없습니다.");
+            Assert.That(hasGrass, Is.True, "검증용 지형에 육지가 없습니다.");
         }
     }
 }
