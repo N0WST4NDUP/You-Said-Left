@@ -191,5 +191,109 @@ namespace YouSaidLeft.Tests
             Assert.That(network.HasPath(120, 180), Is.True);
             Assert.That(network.HasPath(180, 120), Is.True);
         }
+
+        [Test]
+        public void 터널의_입구와_출구는_내부를_통해_이어지고_지표_도로와_분리된다()
+        {
+            var network = new RoadNetwork();
+            // 입구 앞 도로
+            network.AddNode(new RoadNode(10, new Vector2Int(0, 5), 1));
+            // 터널 입구
+            network.AddNode(new RoadNode(17, new Vector2Int(1, 5), 1));
+            // 터널 내부
+            network.AddNode(new RoadNode(42, new Vector2Int(2, 5), 1));
+            // 터널 출구
+            network.AddNode(new RoadNode(90, new Vector2Int(3, 5), 1));
+            // 출구 뒤 도로
+            network.AddNode(new RoadNode(100, new Vector2Int(4, 5), 1));
+            // 지표 도로 시작
+            network.AddNode(new RoadNode(120, new Vector2Int(2, 4), 3));
+            // 지표 도로 중앙
+            network.AddNode(new RoadNode(150, new Vector2Int(2, 5), 3));
+            // 지표 도로 끝
+            network.AddNode(new RoadNode(180, new Vector2Int(2, 6), 3));
+
+            // 초기 연결
+            network.ConnectBidirectional(10, 17);
+            network.ConnectBidirectional(90, 100);
+            network.ConnectBidirectional(120, 150);
+            network.ConnectBidirectional(150, 180);
+
+            // 터널 연결 확인
+            Assert.That(network.HasPath(10, 100), Is.False);
+            Assert.That(network.HasPath(100, 10), Is.False);
+
+            // 입구 - 중간 연결 후 확인
+            network.ConnectBidirectional(17, 42);
+            Assert.That(network.HasPath(10, 100), Is.False);
+            Assert.That(network.HasPath(100, 10), Is.False);
+
+            // 중간 - 출구 연결 후 확인
+            network.ConnectBidirectional(42, 90);
+            Assert.That(network.HasPath(10, 100), Is.True);
+            Assert.That(network.HasPath(100, 10), Is.True);
+
+            // 내부를 경유해야 하는지 확인
+            Assert.That(network.HasDirectConnection(17, 90), Is.False);
+            Assert.That(network.HasDirectConnection(90, 17), Is.False);
+            Assert.That(network.HasDirectConnection(42, 150), Is.False);
+            Assert.That(network.HasDirectConnection(150, 42), Is.False);
+
+            // 터널과 지표 연결 확인
+            Assert.That(network.HasPath(42, 150), Is.False);
+            Assert.That(network.HasPath(150, 42), Is.False);
+
+            // 지표 경로 유지 확인
+            Assert.That(network.HasPath(120, 180), Is.True);
+            Assert.That(network.HasPath(180, 120), Is.True);
+        }
+
+        [Test]
+        public void 물_위의_도로를_연결해도_지형_바닥과_수면은_유지된다()
+        {
+            var generator = new BlueprintGenerator((x, y) => x == 1 ? 0 : 3);
+            var blueprint = generator.CreateBlueprint(width: 3, height: 1, baseLevel: 0, waterLevel: 2);
+
+            var expectedLevels = new[] { 3, 0, 3 };
+            var expectedKinds = new[]
+            {
+                TerrainKind.Grass,
+                TerrainKind.Water,
+                TerrainKind.Grass,
+            };
+
+            void AssertTerrain()
+            {
+                for (var x = 0; x < expectedLevels.Length; x++)
+                {
+                    Assert.That(blueprint.TryGetCell(x, 0, out var cell), Is.True);
+                    Assert.That(cell.Level, Is.EqualTo(expectedLevels[x]));
+                    Assert.That(cell.Kind, Is.EqualTo(expectedKinds[x]));
+                }
+
+                Assert.That(blueprint.WaterLevel, Is.EqualTo(2));
+            }
+
+            AssertTerrain();
+
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(0, 0), 3));
+            network.AddNode(new RoadNode(42, new Vector2Int(1, 0), 3));
+            network.AddNode(new RoadNode(90, new Vector2Int(2, 0), 3));
+
+            network.ConnectBidirectional(17, 42);
+            network.ConnectBidirectional(42, 90);
+
+            Assert.That(network.HasPath(17, 90), Is.True);
+            Assert.That(network.HasPath(90, 17), Is.True);
+            Assert.That(network.HasDirectConnection(17, 90), Is.False);
+            Assert.That(network.HasDirectConnection(90, 17), Is.False);
+
+            Assert.That(network.TryGetNode(42, out var middleRoad), Is.True);
+            Assert.That(middleRoad.Coordinates, Is.EqualTo(new Vector2Int(1, 0)));
+            Assert.That(middleRoad.Level, Is.EqualTo(3));
+
+            AssertTerrain();
+        }
     }
 }
