@@ -1,6 +1,6 @@
 # RoadNetwork API
 
-도로 노드를 ID로 저장하고, 명시한 양방향 직접 연결 및 여러 구간을 거치는 도달 가능성을 조회하는 현재 API다. 소스는 [RoadNetwork.cs](../../Assets/Scripts/Core/Blueprint/RoadNetwork.cs), 검증 코드는 [RoadNetworkTests.cs](../../Assets/Tests/Editor/RoadNetworkTests.cs)에 있다. 실행 결과와 다음 작업은 [작업 현황](../blueprint-progress.md)을 확인한다.
+도로 노드와 소속 포트를 노드 ID별로 저장하고, 명시한 양방향 직접 연결 및 여러 구간을 거치는 도달 가능성을 조회하는 현재 API다. 소스는 [RoadNetwork.cs](../../Assets/Scripts/Core/Blueprint/RoadNetwork.cs), 검증 코드는 [RoadNetworkTests.cs](../../Assets/Tests/Editor/RoadNetworkTests.cs)에 있다. 실행 결과와 다음 작업은 [작업 현황](../blueprint-progress.md)을 확인한다.
 
 ## 현재 구현 범위
 
@@ -8,6 +8,7 @@
 - 지형 `Blueprint`와 독립적인 객체이며, 도로 노드를 추가해도 지형 셀을 수정하지 않는다.
 - 좌표·높이로 연결을 추론하지 않고 `ConnectBidirectional`로 지정한 직접 연결만 저장한다.
 - `HasPath`는 저장된 연결을 BFS로 탐색해 도달 여부를 bool로 반환한다. 경로 목록이나 거리·시간·건설 비용의 최적 경로를 반환하지 않는다.
+- 노드 ID별로 여러 포트를 보관한다. 조회 결과는 스냅샷이며, 포트 등록은 연결을 추가하지 않는다.
 - 포트 판정은 아래의 별도 `RoadPortMatcher`에서 경계 높이·반대 방향과 방향에 맞는 바로 이웃 셀을 검사한다. 자동 도로 생성, 경사·실제 포트 형식·공간 검사, 3D 조립과 실제 주행은 아직 구현하지 않았다.
 
 `HasPath`의 여러 구간 도달·고립 노드 테스트와 등록된 노드에 한정한 자기 도달 테스트의 GREEN을 확인했다. 자기 도달 테스트는 한쪽 ID만 없는 조회도 함께 검증한다. 이 테스트의 최초 RED는 AI가 실행 확인하지 않았다. 입체교차와 램프 사례는 직접 연결과 경유 경로를 구분하고 기존 내부 경로 유지까지 보강해 GREEN을 확인했다. 터널 역할의 노드를 통한 입출구 연결과 지표 도로의 분리도 양방향 GREEN을 확인했다.
@@ -42,6 +43,8 @@ public class RoadNetwork
     public void ConnectBidirectional(int firstNodeId, int secondNodeId);
     public bool HasDirectConnection(int fromNodeId, int toNodeId);
     public bool HasPath(int startNodeId, int destinationNodeId);
+    public void AddPort(int ownerNodeId, RoadPort port);
+    public IReadOnlyList<RoadPort> GetPorts(int ownerNodeId);
 }
 ```
 
@@ -52,6 +55,8 @@ public class RoadNetwork
 | `ConnectBidirectional` | 두 ID의 노드가 모두 존재하면 두 방향의 직접 연결을 추가. 기존 연결 집합은 유지 |
 | `HasDirectConnection` | 출발 ID의 연결 집합에 도착 ID가 포함되어 있는지 반환. 출발 집합이 없으면 `false` |
 | `HasPath` | 출발·도착 중 없는 ID가 있으면 `false`. 두 ID가 존재하면 저장된 직접 연결을 탐색해 도달 여부 반환. 등록된 노드는 자기 간선 없이 이동 0회로 자기 자신에 도달 |
+| `AddPort` | 소속 노드가 있으면 그 ID의 목록에 한 항목 추가. 없으면 저장 전에 `ArgumentException`. 같은 값의 반복 등록도 별도 항목으로 보관 |
+| `GetPorts` | 없는 노드면 `ArgumentException`. 등록된 노드에 포트가 없으면 빈 결과, 있으면 조회 시점의 포트 값을 복사한 스냅샷 반환 |
 
 `default(RoadNode)`은 ID 0, 좌표 `(0, 0)`, 높이 0이다. 조회 실패를 노드 값으로 구분하지 말고 `TryGetNode`의 bool 결과를 먼저 확인한다.
 
@@ -75,7 +80,7 @@ public class RoadNetwork
 
 ## 검증한 동작과 남은 경계 사례
 
-현재 RoadNetwork Editor 테스트는 다음 13개 사례를 검증한다.
+포트 등록·조회 단계 전에 완료한 RoadNetwork Editor 테스트는 다음 13개 사례를 검증한다.
 
 - 같은 수평 좌표의 서로 다른 높이 노드 저장·조회.
 - 중복 ID 거부와 기존 노드 유지.
@@ -92,7 +97,7 @@ public class RoadNetwork
 - 첫 번째 노드가 없는 `ConnectBidirectional(999, 17)` 요청의 예외와 상태 보존.
 - 양쪽 노드가 없는 `ConnectBidirectional(998, 999)` 요청의 예외와 상태 보존.
 
-위 세 연결 입력 사례는 각각 노드 `17`, `42`와 유효한 `17 ↔ 42` 연결을 가진 새 네트워크에서 시작한다. `ArgumentException`, 기존 직접 연결의 양방향 유지, 실패한 요청의 양방향 직접 연결 부재, 없는 노드가 추가되지 않음과 기존 두 노드의 전체 값 보존을 확인한다. `HasPath`는 없는 ID를 먼저 거부하므로 부분 저장 방지는 `HasDirectConnection`으로 검사한다. 2026-10-10 현재 소스로 전체 Editor 테스트 89개 통과, 실패·스킵·미결정 0개를 확인했다. 기존 예외 처리의 회귀 GREEN이며 새 기능의 RED → GREEN 기록은 아니다.
+위 세 연결 입력 사례는 각각 노드 `17`, `42`와 유효한 `17 ↔ 42` 연결을 가진 새 네트워크에서 시작한다. `ArgumentException`, 기존 직접 연결의 양방향 유지, 실패한 요청의 양방향 직접 연결 부재, 없는 노드가 추가되지 않음과 기존 두 노드의 전체 값 보존을 확인한다. `HasPath`는 없는 ID를 먼저 거부하므로 부분 저장 방지는 `HasDirectConnection`으로 검사한다. 2026-10-10 #7 테스트 추가 전 그 시점 소스로 전체 Editor 테스트 89개 통과, 실패·스킵·미결정 0개를 확인했다. 기존 예외 처리의 회귀 GREEN이며 새 기능의 RED → GREEN 기록은 아니다.
 
 중복 연결과 자기 연결의 별도 테스트는 아직 없다. 현재 `HashSet` 구현은 중복 추가를 한 항목으로 유지하고 자기 연결도 저장할 수 있으나, 이 경계 동작을 게임 규칙으로 확정한 것은 아니다.
 
@@ -131,3 +136,43 @@ Y축 회귀 테스트의 다섯 사례를 추가한 그 시점 소스로 Editor 
 X축 인접성의 여섯 사례를 추가한 그 시점 소스로 Editor 테스트 전체 80개 중 75개 통과·5개 실패, 스킵·미결정 0개의 RED를 확인했다. 같은 높이의 `PositiveX/NegativeX` 쌍에서 잘못된 위치의 다섯 사례도 `true`가 반환돼 실패했다. 사용자 좌표 판정 구현 후 그 시점 소스로 전체 80개 통과, 실패·스킵·미결정 0개의 GREEN을 확인했다.
 
 Y축 위치 회귀의 여섯 사례도 추가한 그 시점 소스로 Editor 테스트 전체 86개 통과, 실패·스킵·미결정 0개를 확인했다. 포트의 23개 사례 모두 정방향·역방향 조회가 통과했다. 같은 셀, 두 칸 거리, 뒤쪽 이웃, 다른 축의 이웃과 대각선인 잘못된 위치를 두 축 모두에서 거부한다. 이 결과는 논리 경계 조건의 검증이며 실제 모듈의 형식·기하·공간과 차량 주행은 포함하지 않는다.
+
+## 노드 ID별 포트 등록·조회
+
+[#7](https://github.com/N0WST4NDUP/You-Said-Left/issues/7)의 저장·조회 계약을 구현하고 검증했다. `ownerNodeId`로 소속을 명시하며 노드·포트의 좌표나 높이로 소속을 추론하지 않는다. 노드와 도로 타일·모듈의 대응 관계를 확정한 것은 아니다. 사용자는 이번 범위의 검증과 커밋 추천을 마친 뒤 `Coordinates`와 `CellCoordinates`의 관계 및 중복 모델을 정리하기로 했다.
+
+### 저장과 스냅샷 계약
+
+- `Dictionary<int, List<RoadPort>>`에 소속 ID별로 저장한다. 한 노드에 여러 포트를 추가할 수 있고 같은 값도 반복 보관한다.
+- `AddPort`와 `GetPorts`는 먼저 노드 존재를 검사한다. 없는 ID면 `ArgumentException`이며 기존 노드·포트·연결을 변경하지 않는다.
+- 노드와 다른 셀 주소의 포트도 명시한 소속으로 보관한다. 노드와 포트의 전체 값이 유지되며, `RoadNode.Level`과 각 `RoadPort.BoundaryLevel`도 독립적으로 유지된다.
+- 등록된 노드에 포트가 없으면 `Array.Empty<RoadPort>()`를 반환하며 빈 목록을 내부에 새로 저장하지 않는다. 포트가 있으면 `ToArray()`로 복사한 결과를 반환한다.
+- 이후 등록은 이전 조회 결과를 바꾸지 않는다. 외부에서 반환 배열의 항목을 교체해도 내부 포트 목록은 유지된다. `IReadOnlyList<RoadPort>`라는 반환 타입만으로 불변성이 보장되는 것은 아니며, 현재 구현은 내부 저장과 반환 결과를 분리한다.
+- 포트 값은 읽기 전용 필드로 구성된 값 타입이므로 현재 필드에는 배열 복사로 충분하다. 비어 있지 않은 조회는 호출마다 배열을 할당하고 포트 수만큼 복사한다. 기존 노드 존재 조회는 선형 검색이다. 캐시·성능 측정은 이번 범위에 포함하지 않는다.
+- 논리 경계가 맞는 포트를 등록해도 새 직접 연결이나 경로가 생기지 않고 기존 연결과 경로는 유지된다. `RoadPortMatcher`와 `ConnectBidirectional`의 계약은 유지한다.
+
+이 허용은 값 보관의 계약이며 실제 모듈의 기하·배치·주행 유효성을 뜻하지 않는다. 포트 판정의 간선 적용, 모듈/포트의 별도 ID·에셋 매핑, 삭제·이동과 공간·조립·차량 검증은 후속 범위다.
+
+### 실행 기록
+
+2026-10-10 사용자가 한 동작씩 작성한 포트 저장·조회 테스트 11개를 검증했다. 아래 전체 테스트 수는 각 단계의 그 시점 소스로 실행한 결과다.
+
+| 추가한 동작 | 확인한 결과 |
+|---|---|
+| 정상 등록·조회 | 빈 뼈대에서 전체 90개 중 89개 통과·1개 실패. 포트 개수 기대값 `1`, 실제값 `0`의 RED → 사용자 구현 후 90개 GREEN |
+| 등록된 노드의 빈 목록 | 전체 91개 GREEN. 정식 테스트의 RED는 AI가 실행 확인하지 않음 |
+| 추가 등록 후 이전 결과 유지 | 전체 92개 중 91개 통과·1개 실패. 이전 결과 개수 기대값 `1`, 실제값 `2`의 RED → `ToArray()` 구현 후 92개 GREEN |
+| 조회 결과의 외부 수정 격리 | 전체 93개 회귀 GREEN |
+| 없는 노드의 등록 예외·상태 보존 | RED와 수정은 사용자 보고. AI 실행은 전체 94개 GREEN. 이후 해당 노드를 명시적으로 추가해 빈 목록을 확인하여 숨은 부분 저장도 검사 |
+| 없는 노드의 조회 예외·상태 보존 | 전체 95개 회귀 GREEN |
+| 같은 좌표·높이 노드의 ID별 소속 분리 | 전체 96개 회귀 GREEN. 한 소속의 추가 등록이 다른 소속에 섞이지 않음 |
+| 같은 값의 반복 등록 | 전체 97개 회귀 GREEN. 두 번 등록한 값이 두 항목으로 유지 |
+| 다른 셀 주소의 포트 보관 | 전체 98개 회귀 GREEN. 포트 좌표에 다른 노드가 있어도 명시한 소속과 두 노드 원본 값 유지 |
+| 경계 높이의 독립 보관 | 전체 99개 회귀 GREEN. 높이 `1`인 노드에 경계 높이 `1`, `2`인 두 포트의 전체 값 유지 |
+| 포트 등록 전후의 연결 보존 | 전체 100개 회귀 GREEN. 각 등록의 성공을 확인하고 기존 `17 ↔ 90`의 직접 연결·경로 유지, `17 ↔ 42`와 `42 ↔ 90`의 직접 연결·경로 부재를 각 단계에서 양방향 검사 |
+
+첫 GREEN 뒤 Editor의 메모리상 새 네트워크 진단에서는 빈 목록 조회의 `KeyNotFoundException`, 내부 `List` 반환으로 인한 이전 결과 변경·외부 `Clear()`의 내부 삭제, 없는 ID 등록의 예외 누락·조회의 `null` 반환을 확인했다. 이 진단과 정식 테스트의 RED 기록은 구분하며, 현재 구현과 위 테스트에서 해당 경계 계약을 보강했다. 기존 구현의 회귀 검증에 인위적인 RED는 만들지 않았다.
+
+최종 소스로 `unity command run_tests --mode editor --project-path "D:/01_Application/00_Personal/You Said Left" --format json --timeout 60`을 실행해 전체 100개 통과, 실패·스킵·미결정 0개를 확인했다. RoadNetwork 테스트는 기존 13개와 이번 11개를 합친 24개이며 RoadPort 테스트 23개도 통과했다. `dotnet run --project tools/RepositoryChecks --no-restore -- lint --all`은 C# 소스 9개 검사, 구문·규칙 위반 0개였다. Editor 테스트 파일은 저장소 C# 검사 범위에 포함되지 않으며 Unity Editor에서 컴파일·실행했다.
+
+코드·테스트 리뷰에서 이번 계약의 결함이나 검증 누락을 찾지 못했다. 논리적 소속·상태 보존과 그래프 관계를 확인한 결과이며, 실제 모듈 조립·포트 정렬·공간과 차량 주행은 이번 검증에 포함하지 않는다.

@@ -10,6 +10,7 @@ namespace YouSaidLeft.Core
         public readonly Vector2Int Coordinates;
         public readonly int Level;
 
+
         public RoadNode(int id, Vector2Int coordinates, int level)
         {
             Id = id;
@@ -22,11 +23,13 @@ namespace YouSaidLeft.Core
     {
         private readonly List<RoadNode> _nodes;
         private readonly Dictionary<int, HashSet<int>> _connections;
+        private readonly Dictionary<int, List<RoadPort>> _ports;
 
         public RoadNetwork()
         {
             _nodes = new();
             _connections = new();
+            _ports = new();
         }
 
         #region Node Access Methods
@@ -125,6 +128,38 @@ namespace YouSaidLeft.Core
                 }
             }
             return false;
+        }
+        #endregion
+
+        #region Port Access Methods
+        public void AddPort(int ownerNodeId, RoadPort port)
+        {
+            if (!TryGetNode(ownerNodeId, out _))
+            {
+                throw new ArgumentException("노드를 찾을 수 없습니다.");
+            }
+
+            if (!_ports.TryGetValue(ownerNodeId, out var ports))
+            {
+                ports = new();
+                _ports.Add(ownerNodeId, ports);
+            }
+            ports.Add(port);
+        }
+
+        public IReadOnlyList<RoadPort> GetPorts(int ownerNodeId)
+        {
+            if (!TryGetNode(ownerNodeId, out _))
+            {
+                throw new ArgumentException("노드를 찾을 수 없습니다.");
+            }
+
+            if (!_ports.TryGetValue(ownerNodeId, out var ports))
+            {
+                return Array.Empty<RoadPort>();
+            }
+
+            return ports.ToArray();
         }
         #endregion
     }

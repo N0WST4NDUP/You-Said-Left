@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using YouSaidLeft.Core;
@@ -392,6 +393,334 @@ namespace YouSaidLeft.Tests
 
             Assert.That(network.TryGetNode(42, out var actualSecond), Is.True);
             Assert.That(actualSecond, Is.EqualTo(secondNode));
+        }
+
+        [Test]
+        public void 등록한_포트를_소속_노드에서_그대로_조회한다()
+        {
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(2, 5), 1));
+
+            var port = new RoadPort(
+                new Vector2Int(2, 5),
+                RoadPortSide.NegativeX,
+                1);
+
+            network.AddPort(17, port);
+
+            var ports = network.GetPorts(17);
+
+            Assert.That(ports.Count, Is.EqualTo(1));
+            Assert.That(ports[0].CellCoordinates, Is.EqualTo(new Vector2Int(2, 5)));
+            Assert.That(ports[0].Side, Is.EqualTo(RoadPortSide.NegativeX));
+            Assert.That(ports[0].BoundaryLevel, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void 등록된_노드에_포트가_없으면_빈_목록을_반환한다()
+        {
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(2, 5), 1));
+
+            var ports = network.GetPorts(17);
+
+            Assert.That(ports, Is.Empty);
+        }
+
+        [Test]
+        public void 포트를_추가해도_이전_조회_결과는_유지된다()
+        {
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(2, 5), 1));
+
+            var firstPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.NegativeX, 1);
+            var secondPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.PositiveX, 1);
+
+            network.AddPort(17, firstPort);
+            var previousPorts = network.GetPorts(17);
+
+            network.AddPort(17, secondPort);
+
+            Assert.That(network.GetPorts(17).Count, Is.EqualTo(2));
+            Assert.That(previousPorts.Count, Is.EqualTo(1));
+            Assert.That(previousPorts[0], Is.EqualTo(firstPort));
+        }
+
+        [Test]
+        public void 조회_결과를_수정해도_등록된_포트는_유지된다()
+        {
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(2, 5), 1));
+
+            var originalPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.NegativeX, 1);
+
+            network.AddPort(17, originalPort);
+
+            var result = network.GetPorts(17);
+            Assert.That(result.Count, Is.EqualTo(1));
+
+            if (result is IList<RoadPort> editable)
+            {
+                try
+                {
+                    editable[0] = new RoadPort(
+                        new Vector2Int(9, 8), RoadPortSide.PositiveY, 3);
+                }
+                catch (NotSupportedException)
+                {
+                    // 수정 자체를 거부하는 읽기 전용 결과도 허용한다.
+                }
+            }
+
+            var storedPorts = network.GetPorts(17);
+
+            Assert.That(storedPorts.Count, Is.EqualTo(1));
+            Assert.That(storedPorts[0], Is.EqualTo(originalPort));
+        }
+
+        [Test]
+        public void 없는_노드의_포트_등록은_예외를_던지고_기존_상태를_유지한다()
+        {
+            var network = new RoadNetwork();
+            var firstNode = new RoadNode(17, new Vector2Int(2, 5), 1);
+            var secondNode = new RoadNode(42, new Vector2Int(3, 5), 1);
+
+            network.AddNode(firstNode);
+            network.AddNode(secondNode);
+            network.ConnectBidirectional(17, 42);
+
+            var firstPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.NegativeX, 1);
+            var secondPort = new RoadPort(
+                new Vector2Int(3, 5), RoadPortSide.PositiveX, 1);
+            var rejectedPort = new RoadPort(
+                new Vector2Int(9, 8), RoadPortSide.PositiveY, 3);
+
+            network.AddPort(17, firstPort);
+            network.AddPort(42, secondPort);
+
+            Assert.Throws<ArgumentException>(
+                () => network.AddPort(999, rejectedPort));
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { firstPort }));
+            Assert.That(network.GetPorts(42),
+                Is.EqualTo(new[] { secondPort }));
+
+            Assert.That(network.TryGetNode(17, out var actualFirst), Is.True);
+            Assert.That(actualFirst, Is.EqualTo(firstNode));
+            Assert.That(network.TryGetNode(42, out var actualSecond), Is.True);
+            Assert.That(actualSecond, Is.EqualTo(secondNode));
+            Assert.That(network.TryGetNode(999, out _), Is.False);
+
+            Assert.That(network.HasDirectConnection(17, 42), Is.True);
+            Assert.That(network.HasDirectConnection(42, 17), Is.True);
+            Assert.That(network.HasDirectConnection(17, 999), Is.False);
+            Assert.That(network.HasDirectConnection(999, 17), Is.False);
+            Assert.That(network.HasDirectConnection(42, 999), Is.False);
+            Assert.That(network.HasDirectConnection(999, 42), Is.False);
+
+            network.AddNode(new RoadNode(999, new Vector2Int(9, 8), 3));
+            Assert.That(network.GetPorts(999), Is.Empty);
+        }
+
+        [Test]
+        public void 없는_노드의_포트_조회는_예외를_던지고_기존_상태를_유지한다()
+        {
+            var network = new RoadNetwork();
+            var firstNode = new RoadNode(17, new Vector2Int(2, 5), 1);
+            var secondNode = new RoadNode(42, new Vector2Int(3, 5), 1);
+
+            network.AddNode(firstNode);
+            network.AddNode(secondNode);
+            network.ConnectBidirectional(17, 42);
+
+            var firstPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.NegativeX, 1);
+            var secondPort = new RoadPort(
+                new Vector2Int(3, 5), RoadPortSide.PositiveX, 1);
+
+            network.AddPort(17, firstPort);
+            network.AddPort(42, secondPort);
+
+            Assert.Throws<ArgumentException>(
+                () => network.GetPorts(999));
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { firstPort }));
+            Assert.That(network.GetPorts(42),
+                Is.EqualTo(new[] { secondPort }));
+
+            Assert.That(network.TryGetNode(17, out var actualFirst), Is.True);
+            Assert.That(actualFirst, Is.EqualTo(firstNode));
+            Assert.That(network.TryGetNode(42, out var actualSecond), Is.True);
+            Assert.That(actualSecond, Is.EqualTo(secondNode));
+            Assert.That(network.TryGetNode(999, out _), Is.False);
+
+            Assert.That(network.HasDirectConnection(17, 42), Is.True);
+            Assert.That(network.HasDirectConnection(42, 17), Is.True);
+            Assert.That(network.HasDirectConnection(17, 999), Is.False);
+            Assert.That(network.HasDirectConnection(999, 17), Is.False);
+            Assert.That(network.HasDirectConnection(42, 999), Is.False);
+            Assert.That(network.HasDirectConnection(999, 42), Is.False);
+
+            network.AddNode(new RoadNode(999, new Vector2Int(9, 8), 3));
+            Assert.That(network.GetPorts(999), Is.Empty);
+        }
+
+        [Test]
+        public void 같은_좌표와_높이의_노드는_포트를_소속별로_보관한다()
+        {
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(2, 5), 1));
+            network.AddNode(new RoadNode(42, new Vector2Int(2, 5), 1));
+
+            var sharedPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.NegativeX, 1);
+            var additionalPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.PositiveX, 1);
+
+            network.AddPort(17, sharedPort);
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { sharedPort }));
+            Assert.That(network.GetPorts(42), Is.Empty);
+
+            network.AddPort(42, sharedPort);
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { sharedPort }));
+            Assert.That(network.GetPorts(42),
+                Is.EqualTo(new[] { sharedPort }));
+
+            network.AddPort(17, additionalPort);
+
+            Assert.That(network.GetPorts(17),
+                Is.EquivalentTo(new[] { sharedPort, additionalPort }));
+            Assert.That(network.GetPorts(42),
+                Is.EqualTo(new[] { sharedPort }));
+        }
+
+        [Test]
+        public void 같은_포트를_반복_등록하면_각각_별도_항목으로_보관한다()
+        {
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(2, 5), 1));
+
+            var port = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.NegativeX, 1);
+
+            network.AddPort(17, port);
+            network.AddPort(17, port);
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { port, port }));
+        }
+
+        [Test]
+        public void 노드와_다른_셀_주소의_포트도_명시한_ID에_보관한다()
+        {
+            var network = new RoadNetwork();
+            var ownerNode = new RoadNode(17, new Vector2Int(2, 5), 1);
+            var otherNode = new RoadNode(42, new Vector2Int(9, 8), 1);
+
+            network.AddNode(ownerNode);
+            network.AddNode(otherNode);
+
+            var port = new RoadPort(
+                new Vector2Int(9, 8), RoadPortSide.NegativeX, 1);
+
+            network.AddPort(17, port);
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { port }));
+            Assert.That(network.GetPorts(42), Is.Empty);
+
+            Assert.That(network.TryGetNode(17, out var actualOwner), Is.True);
+            Assert.That(actualOwner, Is.EqualTo(ownerNode));
+            Assert.That(network.TryGetNode(42, out var actualOther), Is.True);
+            Assert.That(actualOther, Is.EqualTo(otherNode));
+        }
+
+        [Test]
+        public void 노드_높이와_포트_경계_높이를_독립적으로_보관한다()
+        {
+            var network = new RoadNetwork();
+            var node = new RoadNode(17, new Vector2Int(2, 5), 1);
+            network.AddNode(node);
+
+            var lowerPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.NegativeX, 1);
+            var upperPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.PositiveX, 2);
+
+            network.AddPort(17, lowerPort);
+            network.AddPort(17, upperPort);
+
+            Assert.That(network.GetPorts(17),
+                Is.EquivalentTo(new[] { lowerPort, upperPort }));
+
+            Assert.That(network.TryGetNode(17, out var actualNode), Is.True);
+            Assert.That(actualNode, Is.EqualTo(node));
+        }
+
+        [Test]
+        public void 경계가_맞는_포트를_등록해도_연결은_변경되지_않는다()
+        {
+            var network = new RoadNetwork();
+            network.AddNode(new RoadNode(17, new Vector2Int(2, 5), 1));
+            network.AddNode(new RoadNode(42, new Vector2Int(3, 5), 1));
+            network.AddNode(new RoadNode(90, new Vector2Int(1, 5), 1));
+            network.ConnectBidirectional(17, 90);
+
+            var firstPort = new RoadPort(
+                new Vector2Int(2, 5), RoadPortSide.PositiveX, 1);
+            var secondPort = new RoadPort(
+                new Vector2Int(3, 5), RoadPortSide.NegativeX, 1);
+
+            Assert.That(
+                RoadPortMatcher.MatchesLogicalBoundary(firstPort, secondPort),
+                Is.True);
+            Assert.That(
+                RoadPortMatcher.MatchesLogicalBoundary(secondPort, firstPort),
+                Is.True);
+
+            AssertConnectionsUnchanged();
+
+            network.AddPort(17, firstPort);
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { firstPort }));
+            AssertConnectionsUnchanged();
+
+            network.AddPort(42, secondPort);
+
+            Assert.That(network.GetPorts(17),
+                Is.EqualTo(new[] { firstPort }));
+            Assert.That(network.GetPorts(42),
+                Is.EqualTo(new[] { secondPort }));
+            AssertConnectionsUnchanged();
+
+            void AssertConnectionsUnchanged()
+            {
+                Assert.That(network.HasDirectConnection(17, 90), Is.True);
+                Assert.That(network.HasDirectConnection(90, 17), Is.True);
+                Assert.That(network.HasPath(17, 90), Is.True);
+                Assert.That(network.HasPath(90, 17), Is.True);
+
+                Assert.That(network.HasDirectConnection(17, 42), Is.False);
+                Assert.That(network.HasDirectConnection(42, 17), Is.False);
+                Assert.That(network.HasPath(17, 42), Is.False);
+                Assert.That(network.HasPath(42, 17), Is.False);
+
+                Assert.That(network.HasDirectConnection(42, 90), Is.False);
+                Assert.That(network.HasDirectConnection(90, 42), Is.False);
+                Assert.That(network.HasPath(42, 90), Is.False);
+                Assert.That(network.HasPath(90, 42), Is.False);
+            }
         }
     }
 }
