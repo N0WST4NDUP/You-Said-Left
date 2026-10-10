@@ -295,5 +295,103 @@ namespace YouSaidLeft.Tests
 
             AssertTerrain();
         }
+
+        [Test]
+        public void 첫_번째_노드가_없으면_예외가_발생하고_기존_연결은_유지된다()
+        {
+            var network = new RoadNetwork();
+            var firstNode = new RoadNode(17, new Vector2Int(2, 5), 1);
+            var secondNode = new RoadNode(42, new Vector2Int(3, 5), 1);
+
+            network.AddNode(firstNode);
+            network.AddNode(secondNode);
+            network.ConnectBidirectional(17, 42);
+
+            Assert.Throws<ArgumentException>(() =>
+                network.ConnectBidirectional(999, 17));
+
+            // 기존 양방향 연결이 유지된다.
+            Assert.That(network.HasDirectConnection(17, 42), Is.True);
+            Assert.That(network.HasDirectConnection(42, 17), Is.True);
+
+            // 실패한 요청의 연결이 어느 방향에도 남지 않는다.
+            Assert.That(network.HasDirectConnection(999, 17), Is.False);
+            Assert.That(network.HasDirectConnection(17, 999), Is.False);
+
+            // 없는 노드가 추가되지 않고, 기존 노드 값도 유지된다.
+            Assert.That(network.TryGetNode(999, out _), Is.False);
+
+            Assert.That(network.TryGetNode(17, out var actualFirst), Is.True);
+            Assert.That(actualFirst, Is.EqualTo(firstNode));
+
+            Assert.That(network.TryGetNode(42, out var actualSecond), Is.True);
+            Assert.That(actualSecond, Is.EqualTo(secondNode));
+        }
+
+        [Test]
+        public void 두_번째_노드가_없으면_예외가_발생하고_기존_연결은_유지된다()
+        {
+            var network = new RoadNetwork();
+            var firstNode = new RoadNode(17, new Vector2Int(2, 5), 1);
+            var secondNode = new RoadNode(42, new Vector2Int(3, 5), 1);
+
+            network.AddNode(firstNode);
+            network.AddNode(secondNode);
+            network.ConnectBidirectional(17, 42);
+
+            Assert.Throws<ArgumentException>(() =>
+                network.ConnectBidirectional(17, 999));
+
+            // 기존 양방향 연결이 유지된다.
+            Assert.That(network.HasDirectConnection(17, 42), Is.True);
+            Assert.That(network.HasDirectConnection(42, 17), Is.True);
+
+            // 실패한 요청의 연결이 어느 방향에도 남지 않는다.
+            Assert.That(network.HasDirectConnection(17, 999), Is.False);
+            Assert.That(network.HasDirectConnection(999, 17), Is.False);
+
+            // 없는 노드가 추가되지 않고, 기존 노드 값도 유지된다.
+            Assert.That(network.TryGetNode(999, out _), Is.False);
+
+            Assert.That(network.TryGetNode(17, out var actualFirst), Is.True);
+            Assert.That(actualFirst, Is.EqualTo(firstNode));
+
+            Assert.That(network.TryGetNode(42, out var actualSecond), Is.True);
+            Assert.That(actualSecond, Is.EqualTo(secondNode));
+        }
+
+        [Test]
+        public void 양쪽_노드가_없으면_예외가_발생하고_기존_연결은_유지된다()
+        {
+            var network = new RoadNetwork();
+            var firstNode = new RoadNode(17, new Vector2Int(2, 5), 1);
+            var secondNode = new RoadNode(42, new Vector2Int(3, 5), 1);
+
+            network.AddNode(firstNode);
+            network.AddNode(secondNode);
+            network.ConnectBidirectional(17, 42);
+
+            Assert.Throws<ArgumentException>(() =>
+                network.ConnectBidirectional(998, 999));
+
+            // 기존 양방향 연결이 유지된다.
+            Assert.That(network.HasDirectConnection(17, 42), Is.True);
+            Assert.That(network.HasDirectConnection(42, 17), Is.True);
+
+            // 실패한 요청의 연결이 어느 방향에도 남지 않는다.
+            Assert.That(network.HasDirectConnection(998, 999), Is.False);
+            Assert.That(network.HasDirectConnection(999, 998), Is.False);
+
+            // 없는 두 노드가 추가되지 않는다.
+            Assert.That(network.TryGetNode(998, out _), Is.False);
+            Assert.That(network.TryGetNode(999, out _), Is.False);
+
+            // 기존 노드 값도 유지된다.
+            Assert.That(network.TryGetNode(17, out var actualFirst), Is.True);
+            Assert.That(actualFirst, Is.EqualTo(firstNode));
+
+            Assert.That(network.TryGetNode(42, out var actualSecond), Is.True);
+            Assert.That(actualSecond, Is.EqualTo(secondNode));
+        }
     }
 }
