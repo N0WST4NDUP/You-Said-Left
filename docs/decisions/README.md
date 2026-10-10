@@ -12,10 +12,13 @@ You Said Left의 기술·설계 결정과 그 근거를 기록한다. 각 문서
 | [ADR-004](ADR-004-roles-by-boarding-seat.md) | 역할은 시스템이 배정하지 않고 탑승한 좌석으로 정한다 | `Proposed` | — |
 | [ADR-005](ADR-005-terrain-first-generation-with-tunnel-caves.md) | 지형을 먼저 생성하고 동굴을 터널 모듈로 표현한다 | `Accepted` | 2026-10-08 |
 | [ADR-006](ADR-006-separate-terrain-and-grade-separated-road-network.md) | 지형과 입체 도로망을 분리하고 주행 가능한 연결을 먼저 정의한다 | `Accepted` | 2026-10-08 |
+| [ADR-007](ADR-007-node-module-placement-and-port-contracts.md) | 도로 노드를 접속점으로 두고 모듈 배치와 경계 포트를 분리한다 | `Accepted` | 2026-10-11 |
 
 새 ADR을 추가하면 이 표에 한 줄을 추가한다. 번호 오름차순으로 정렬한다.
 
-현재 구현과 진행 상황은 [Blueprint API](../api/blueprint.md)와 [청사진 작업 현황](../blueprint-progress.md)을 참고한다. ADR-001·002의 구현 전 설명은 결정 당시의 기록이며, 현재 코드 상태를 의미하지 않는다. ADR-005는 두 결정을 유지하면서 지형 생성 순서와 동굴 표현을 구체화하고, ADR-006은 지상·지하·고가 도로의 연결·공간 계약과 계획·조립 순서를 보완한다. 현재 지형 API, 미래 입체 도로망의 요구와 아직 선택하지 않은 생성 기법을 구분해 읽는다.
+현재 구현과 진행 상황은 [Blueprint API](../api/blueprint.md)와 [청사진 작업 현황](../blueprint-progress.md)을 참고한다. ADR-001·002의 구현 전 설명은 결정 당시의 기록이며, 현재 코드 상태를 의미하지 않는다. ADR-005는 지형 생성 순서와 동굴 표현을, ADR-006은 입체 도로의 연결·공간 계약을 보완한다. ADR-007은 그래프 점·모듈 배치·경계 포트의 관계와 좌표 원본을 구체화한다. 채택한 설계와 현재 구현을 구분해 읽는다.
+
+ADR-002·005·006의 과거 에셋 조사 제한은 사용자의 철회 이후 현재 지침으로 재적용하지 않는다. 변경 경위는 [ADR-007의 변경 범위](ADR-007-node-module-placement-and-port-contracts.md#변경-범위), 현재 작업 권한은 [AGENTS.md](../../AGENTS.md)를 따른다. 기존 Accepted 본문은 결정 당시 기록으로 보존한다.
 
 ## 작성 규칙
 
