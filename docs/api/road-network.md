@@ -1,6 +1,6 @@
 # RoadNetwork API
 
-도로 노드와 소속 포트를 노드 ID별로 저장하고, 명시한 양방향 직접 연결 및 여러 구간을 거치는 도달 가능성을 조회하는 현재 API다. 소스는 [RoadNetwork.cs](../../Assets/Scripts/Core/Blueprint/RoadNetwork.cs), 검증 코드는 [RoadNetworkTests.cs](../../Assets/Tests/Editor/RoadNetworkTests.cs)에 있다. 실행 결과와 다음 작업은 [작업 현황](../blueprint-progress.md)을 확인한다.
+도로 노드와 소속 포트를 노드 ID별로 저장하고, 명시한 양방향 직접 연결 및 여러 구간을 거치는 도달 가능성을 조회하는 현재 API다. 한 셀 배치와 로컬 포트 정의에서 무회전 포트를 해석하는 별도 API도 이 문서에서 설명한다. 저장 소스는 [RoadNetwork.cs](../../Assets/Scripts/Core/Blueprint/RoadNetwork.cs), 검증 코드는 [RoadNetworkTests.cs](../../Assets/Tests/Editor/RoadNetworkTests.cs)에 있다. 실행 결과와 다음 작업은 [작업 현황](../blueprint-progress.md)을 확인한다.
 
 ## 설계 결정과 현재 API의 구분
 
@@ -11,9 +11,9 @@
 - 각 경계 포트는 접속 노드에 명시적으로 대응한다. 교차로의 중앙 노드는 경계 접속 노드와 구별하고 내부 간선으로 잇는다. 서로 만나는 모듈의 접속 노드는 서로 다른 ID를 유지하며, 호환성을 확인한 뒤 외부 간선을 추가한다. 좌표·높이 일치만으로 ID를 병합하거나 간선을 만들지 않는다.
 - 램프의 양끝 노드는 각 끝점 높이를 가진다. 배치의 기준 높이와 끝점 높이는 서로 다른 의미다. 긴 도로의 경유 노드와 간선은 처음부터 축약하지 않는다.
 
-현재 `RoadNode.Coordinates`와 `RoadPort.CellCoordinates`는 전달한 `Vector2Int` 값을 각각 저장한다. 모듈 배치, 로컬 포트 정의, 실제 접속점 계산과 포트·노드 대응은 아직 없다. 접속점의 구체 타입·단위는 첫 구현 단계 전에 정하며, 기존 `Coordinates`를 반격자 접속점 좌표로 다시 해석하지 않는다. 멀티셀 모듈, 차로, 비용 최적화, 캐시와 직렬화는 이번 결정의 구현 범위에서 제외했다.
+현재 `RoadNode.Coordinates`와 `RoadPort.CellCoordinates`는 전달한 `Vector2Int` 값을 각각 저장한다. [#9](https://github.com/N0WST4NDUP/You-Said-Left/issues/9)에서 최소 한 셀 배치, 로컬 포트 정의와 무회전 접속점 계산을 구현했다. 접속점은 한 셀을 `1`로 놓은 논리 좌표의 `Vector2`이며 셀 중심은 정수 좌표다. 포트·노드 대응은 아직 없고, 기존 `RoadNode.Coordinates`를 반격자 접속점 좌표로 다시 해석하지 않는다. 회전·멀티셀 모듈, 차로, 비용 최적화, 캐시와 직렬화는 이번 구현 범위에서 제외했다.
 
-이 문서의 Editor 통과 수와 RED·GREEN은 각 단계의 과거 실행 기록이다. 가장 최근 기록은 2026-10-10 전체 100개 통과이며, 2026-10-11 문서 갱신에서 Unity 테스트를 다시 실행한 결과가 아니다.
+이 문서의 단계별 Editor 통과 수와 RED·GREEN은 각 시점의 실행 기록이다. 최신 결과는 2026-10-11 현재 소스로 Unity 6000.6.0f1 Editor에서 다시 실행한 전체 124개 통과, 실패·스킵·미결정 0개다. 이 중 무회전 포트 해석 테스트는 24개이며 기존 저장·조회·Matcher 회귀도 함께 통과했다.
 
 ## 현재 구현 범위
 
@@ -22,6 +22,7 @@
 - 좌표·높이로 연결을 추론하지 않고 `ConnectBidirectional`로 지정한 직접 연결만 저장한다.
 - `HasPath`는 저장된 연결을 BFS로 탐색해 도달 여부를 bool로 반환한다. 경로 목록이나 거리·시간·건설 비용의 최적 경로를 반환하지 않는다.
 - 노드 ID별로 여러 포트를 보관한다. 조회 결과는 스냅샷이며, 포트 등록은 연결을 추가하지 않는다.
+- `RoadPortResolver.ResolveUnrotated`는 한 셀 배치와 로컬 포트 정의에서 소속 셀·접속점·방향·절대 경계 높이를 반환한다. 노드 등록이나 포트 저장·간선 추가는 하지 않는다.
 - 포트 판정은 아래의 별도 `RoadPortMatcher`에서 경계 높이·반대 방향과 방향에 맞는 바로 이웃 셀을 검사한다. 자동 도로 생성, 경사·실제 포트 형식·공간 검사, 3D 조립과 실제 주행은 아직 구현하지 않았다.
 
 `HasPath`의 여러 구간 도달·고립 노드 테스트와 등록된 노드에 한정한 자기 도달 테스트의 GREEN을 확인했다. 자기 도달 테스트는 한쪽 ID만 없는 조회도 함께 검증한다. 이 테스트의 최초 RED는 AI가 실행 확인하지 않았다. 입체교차와 램프 사례는 직접 연결과 경유 경로를 구분하고 기존 내부 경로 유지까지 보강해 GREEN을 확인했다. 터널 역할의 노드를 통한 입출구 연결과 지표 도로의 분리도 양방향 GREEN을 확인했다.
@@ -41,7 +42,7 @@ public readonly struct RoadNode
 }
 ```
 
-`Id`는 네트워크 안의 노드 식별자이고 목록 인덱스가 아니다. 현재 `Coordinates`는 전달한 정수 수평 좌표, `Level`은 도로의 절대 높이 층을 저장한다. `Level`은 지형 바닥 높이와 별도로 저장하며, Unity 거리로 변환하는 기능은 없다. ADR-007의 노드 위치는 그래프 접속점·교차점·경유점의 위치라는 의미이며, 그 위치를 표현할 타입·단위와 배치에서 계산하는 API는 아직 구현되지 않았다.
+`Id`는 네트워크 안의 노드 식별자이고 목록 인덱스가 아니다. 현재 `Coordinates`는 전달한 정수 수평 좌표, `Level`은 도로의 절대 높이 층을 저장한다. `Level`은 지형 바닥 높이와 별도로 저장하며, Unity 거리로 변환하는 기능은 없다. ADR-007의 노드 위치는 그래프 접속점·교차점·경유점의 위치라는 의미다. #9의 포트 접속점은 별도 `Vector2`로 계산하지만, `RoadNode`의 좌표 표현 변경과 배치에서 노드 위치를 유도·대응하는 API는 아직 구현하지 않았다.
 
 작은 읽기 전용 값 타입으로 저장·조회 시 값이 복사된다. 같은 좌표·높이의 노드도 ID가 다르면 현재 저장 API는 허용한다. 생성자는 ID의 부호, 좌표 범위, 높이 범위를 검사하지 않는다. 이는 검사 부재에 대한 구현 설명이며, 모든 값의 조립·주행 유효성을 보장하지 않는다.
 
@@ -116,7 +117,7 @@ public class RoadNetwork
 
 ## RoadPort: 논리 경계의 높이·방향·인접성 비교
 
-소스는 [RoadPort.cs](../../Assets/Scripts/Core/Blueprint/RoadPort.cs)와 [RoadPortMatcher.cs](../../Assets/Scripts/Core/Blueprint/RoadPortMatcher.cs), 테스트는 [RoadPortTests.cs](../../Assets/Tests/Editor/RoadPortTests.cs)에 있다. 값 타입, 경계 높이의 동등 비교, X·Y축 반대 방향과 방향에 맞는 이웃 셀 판정을 구현했다. 테스트는 X·Y축 정상 접속, 높이·방향 불일치와 두 축의 잘못된 위치를 양방향으로 검사한다.
+소스는 [RoadPort.cs](../../Assets/Scripts/Core/Blueprint/RoadPort/RoadPort.cs)와 [RoadPortMatcher.cs](../../Assets/Scripts/Core/Blueprint/RoadPort/RoadPortMatcher.cs), 테스트는 [RoadPortTests.cs](../../Assets/Tests/Editor/RoadPortTests.cs)에 있다. 값 타입, 경계 높이의 동등 비교, X·Y축 반대 방향과 방향에 맞는 이웃 셀 판정을 구현했다. 테스트는 X·Y축 정상 접속, 높이·방향 불일치와 두 축의 잘못된 위치를 양방향으로 검사한다.
 
 ```csharp
 public enum RoadPortSide { PositiveX, NegativeX, PositiveY, NegativeY }
@@ -149,6 +150,94 @@ Y축 회귀 테스트의 다섯 사례를 추가한 그 시점 소스로 Editor 
 X축 인접성의 여섯 사례를 추가한 그 시점 소스로 Editor 테스트 전체 80개 중 75개 통과·5개 실패, 스킵·미결정 0개의 RED를 확인했다. 같은 높이의 `PositiveX/NegativeX` 쌍에서 잘못된 위치의 다섯 사례도 `true`가 반환돼 실패했다. 사용자 좌표 판정 구현 후 그 시점 소스로 전체 80개 통과, 실패·스킵·미결정 0개의 GREEN을 확인했다.
 
 Y축 위치 회귀의 여섯 사례도 추가한 그 시점 소스로 Editor 테스트 전체 86개 통과, 실패·스킵·미결정 0개를 확인했다. 포트의 23개 사례 모두 정방향·역방향 조회가 통과했다. 같은 셀, 두 칸 거리, 뒤쪽 이웃, 다른 축의 이웃과 대각선인 잘못된 위치를 두 축 모두에서 거부한다. 이 결과는 논리 경계 조건의 검증이며 실제 모듈의 형식·기하·공간과 차량 주행은 포함하지 않는다.
+
+## 한 셀 배치의 무회전 포트 해석
+
+[#9](https://github.com/N0WST4NDUP/You-Said-Left/issues/9)의 입력과 결과는 [RoadModulePlacement.cs](../../Assets/Scripts/Core/Blueprint/RoadPort/RoadModulePlacement.cs), [RoadPortDefinition.cs](../../Assets/Scripts/Core/Blueprint/RoadPort/RoadPortDefinition.cs), [RoadPortResolver.cs](../../Assets/Scripts/Core/Blueprint/RoadPort/RoadPortResolver.cs)에 있다. 검증 코드는 [RoadPortResolverTests.cs](../../Assets/Tests/Editor/RoadPortResolverTests.cs)다.
+
+```csharp
+public readonly struct RoadModulePlacement
+{
+    public readonly Vector2Int CellCoordinates;
+    public readonly int BaseLevel;
+
+    public RoadModulePlacement(Vector2Int cellCoordinates, int baseLevel);
+}
+
+public readonly struct RoadPortDefinition
+{
+    public readonly Vector2 LocalPosition;
+    public readonly RoadPortSide Side;
+    public readonly int LevelOffset;
+
+    public RoadPortDefinition(Vector2 localPosition, RoadPortSide side, int levelOffset);
+}
+
+public readonly struct ResolvedRoadPort
+{
+    public readonly RoadPort Port;
+    public readonly Vector2 ContactPoint;
+
+    public ResolvedRoadPort(RoadPort port, Vector2 contactPoint);
+}
+
+public static class RoadPortResolver
+{
+    public static ResolvedRoadPort ResolveUnrotated(
+        RoadModulePlacement placement, RoadPortDefinition definition);
+}
+```
+
+### 좌표와 높이 계약
+
+- `CellCoordinates`는 배치의 소속 셀 주소다. 한 셀을 `1`로 놓은 논리 격자에서 셀 중심을 정수 `(x, y)`로 둔다.
+- `LocalPosition`은 셀 중심을 기준으로 한 상대 접속점이다. 입력·결과의 접속점은 `Vector2`의 `float` 정밀도로 계산한다. 반 칸(`0.5`)은 예시이며 좌표를 그 배수나 셀 경계로 제한하지 않는다.
+- `Side`는 무회전 상태의 수평 격자 방향이다. 이 메서드는 정의의 방향을 그대로 반환한다. 수직 높이는 별도 값이며 Unity 월드 축·회전으로 변환하지 않는다.
+- `BaseLevel`은 배치 기준의 정수 높이 층, `LevelOffset`은 로컬 끝점의 상대 정수 높이다. 음수 셀 주소·높이·오프셋도 허용한다.
+- `RoadModulePlacement`는 현재 셀 주소와 기준 높이만 저장한다. 프리팹 선택·배치 ID·회전·멀티셀 크기를 표현하는 최종 배치 모델은 아니다.
+
+| 결과 | 현재 계산 |
+|---|---|
+| `Port.CellCoordinates` | `placement.CellCoordinates` 그대로 |
+| `ContactPoint` | `placement.CellCoordinates + definition.LocalPosition` |
+| `Port.Side` | `definition.Side` 그대로 |
+| `Port.BoundaryLevel` | `checked(placement.BaseLevel + definition.LevelOffset)` |
+
+예를 들어 셀 `(2, 5)`, 기준 높이 `3`, 로컬 위치 `(0.5, 0)`, 방향 `PositiveX`, 높이 오프셋 `-2`는 소속 셀 `(2, 5)`, 접속점 `(2.5, 5)`, 방향 `PositiveX`, 경계 높이 `1`로 해석된다. 접속점과 셀 주소는 서로 다른 값이다.
+
+### 입력 검증과 상태 보존
+
+생성자는 전달값만 저장하고 검증하지 않는다. `ResolveUnrotated`가 로컬 정의를 먼저 검사한 뒤 결과를 계산한다.
+
+| 입력 | 결과 |
+|---|---|
+| 로컬 위치의 X 또는 Y가 NaN | `ArgumentException` |
+| 로컬 위치의 X 또는 Y가 양·음 무한대 | `ArgumentException` |
+| `Side`가 enum에 선언되지 않은 값 | `ArgumentException` |
+| 기준 높이와 로컬 오프셋의 합이 `int` 상한·하한을 벗어남 | `OverflowException` |
+| 합이 정확히 `int.MaxValue` 또는 `int.MinValue` | 정상 높이로 반환 |
+
+`ArgumentException`의 매개변수 이름은 `definition`이다. 현재 구현은 NaN에 별도 메시지를 주고, 유한성은 `float.IsFinite`, 방향은 `Enum.IsDefined`로 확인한다. 높이 덧셈에서 발생한 `OverflowException`은 그대로 전달한다.
+
+입력·결과는 참조 필드가 없는 읽기 전용 값 타입이며 공개 메서드는 입력을 값으로 받는다. 검증 보조 함수는 `in`으로 정의를 읽기만 한다. Resolver에는 네트워크 참조나 등록·연결 호출이 없으므로 원본 정의·배치와 기존 네트워크 상태를 변경하지 않는다. 해석 결과를 포트로 등록하거나 경계 노드에 대응하는 작업은 별도다.
+
+이 메서드는 Blueprint 범위, 로컬 위치와 방향의 형상 일치, 실제 포트 정렬·폭·단면·공간을 검사하지 않는다. `ContactPoint`는 논리 접속점이며 Scene Transform이나 실제 에셋에서 측정한 위치가 아니다. 회전·멀티셀 해석, 노드 대응, 내부 통행·외부 간선 구성, 자동 생성·조립·지도·차량 주행은 #9 범위에 포함하지 않는다.
+
+### 무회전 포트 해석 실행 기록
+
+2026-10-11 현재 소스로 Unity 6000.6.0f1 Editor에서 `unity command run_tests --mode editor --project-path 'D:/01_Application/00_Personal/You Said Left' --format json --timeout 60`을 실행해 전체 124개 통과, 실패·스킵·미결정 0개를 확인했다. 이 중 Resolver 사례는 24개다.
+
+별도 `unity command eval` 실행 점검에서는 노드 `17`, `42`, `90`, 기존 `17 ↔ 42` 연결과 `17`·`42`의 등록 포트를 가진 메모리 내 네트워크를 구성했다. 정상 해석·NaN·무한대·미정의 방향·상한/하한 오버플로의 6개 입력 각각에서 예상 예외, 원본 배치·정의, 기존 노드·포트 전체 값과 개수, 세 ID 사이 모든 직접 연결·도달 관계의 보존을 확인했다. `ArgumentException.ParamName`도 `definition`이었다. 이 점검은 현재 Editor에서 임시 실행한 근거이며 저장된 자동 테스트나 위 124개에 포함하지 않는다.
+
+`dotnet run --project tools/RepositoryChecks --no-restore -- lint --all`은 C# 소스 12개에서 구문·규칙 위반 0개였다. Editor 테스트 파일은 이 C# 검사 범위에 포함되지 않는다.
+
+- 정상 유도, 배치 이동, 네 방향, 상대 높이, 음수 셀·높이와 임의 유한 로컬 위치를 검증한다.
+- NaN 2개·양/음 무한대 4개·미정의 방향 2개의 거부와 양방향 높이 오버플로 2개를 검증한다.
+- 정상 높이의 극값과 극값에 정확히 도달하는 덧셈 4개는 기존 구현의 회귀 GREEN이다. 마지막 음수 셀·임의 로컬 위치 2개도 회귀 GREEN이다.
+- 높이 오버플로 단계는 전체 118개 중 116개 통과·2개 실패를 AI가 직접 확인했다. 두 실패는 기대한 `OverflowException`이 발생하지 않은 것이었다. 사용자 `checked` 구현 후 전체 118개 GREEN을 확인했다.
+- 최초 무회전·무한대 단계의 RED는 사용자 보고이며 AI가 재실행한 GREEN과 구분한다. NaN·미정의 방향 단계의 RED는 AI가 실행 확인하지 않았다.
+
+이 실행은 논리 데이터·계산·예외와 기존 저장·조회·Matcher의 회귀 검증이다. Play Mode·Game View의 실제 조립·주행 검증은 실행하지 않았다.
 
 ## 노드 ID별 포트 등록·조회
 

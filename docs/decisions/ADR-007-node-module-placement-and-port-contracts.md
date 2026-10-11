@@ -18,7 +18,7 @@
 ### 관측된 사실
 
 - [RoadNode](../../Assets/Scripts/Core/Blueprint/RoadNetwork.cs)는 ID, `Vector2Int Coordinates`, `Level`을 저장한다. ID가 다르면 좌표와 높이가 같은 노드도 저장할 수 있다. `ConnectBidirectional`은 존재하는 ID 사이 간선을 저장하고, `HasPath`는 그 간선을 탐색한다. 모듈 형상·높이 호환성은 검사하지 않는다. ([RoadNetwork API](../api/road-network.md), 기준 커밋 `1f00058`)
-- [RoadPort](../../Assets/Scripts/Core/Blueprint/RoadPort.cs)는 소속 셀 주소 `CellCoordinates`, 수평 방향 `Side`, 절대 경계 높이 `BoundaryLevel`을 가진다. [RoadPortMatcher](../../Assets/Scripts/Core/Blueprint/RoadPortMatcher.cs)는 같은 경계 높이·반대 방향·바로 이웃 셀만 검사하고 간선을 추가하지 않는다.
+- [RoadPort](../../Assets/Scripts/Core/Blueprint/RoadPort/RoadPort.cs)는 소속 셀 주소 `CellCoordinates`, 수평 방향 `Side`, 절대 경계 높이 `BoundaryLevel`을 가진다. [RoadPortMatcher](../../Assets/Scripts/Core/Blueprint/RoadPort/RoadPortMatcher.cs)는 같은 경계 높이·반대 방향·바로 이웃 셀만 검사하고 간선을 추가하지 않는다.
 - #7의 `AddPort(ownerNodeId, port)`는 전달한 값을 해당 ID 아래 보관한다. 노드와 포트의 좌표·높이가 달라도 저장하며 중복 값도 유지한다. [RoadNetworkTests](../../Assets/Tests/Editor/RoadNetworkTests.cs)의 좌표 불일치·경사 끝점 높이 사례는 이 보관 계약을 보호한다. 최종 모듈 소속이나 물리적 유효성의 증거는 아니다.
 - [Blueprint](../../Assets/Scripts/Core/Blueprint/Blueprint.cs)의 지형 셀과 도로망은 현재 별도 데이터다. 모듈 배치, 모듈 기준 포트 정의, 포트와 경계 노드의 대응을 구성하는 기능은 없다.
 - ADR-001은 교차로와 도로를 점·선 그래프로 표현하고 청사진으로 도시와 지도를 만든다. ADR-002는 도로 단위 그래프와 타일 내부 차로 경로를 구분한다. ADR-006은 지형과 입체 도로를 분리하고 좌표의 겹침을 연결로 취급하지 않는다. 이번 결정은 그 점·선과 조립 단위의 관계를 구체화한다.
