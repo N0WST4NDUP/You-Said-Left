@@ -1,28 +1,29 @@
 # Blueprint API
 
-지형 격자를 만들고 각 셀의 바닥 높이와 지형 종류를 조회·교체하는 현재 API다. 이 문서는 `YouSaidLeft.Core`의 소스와 Editor 테스트를 기준으로 작성했다. 실행 결과와 다음 작업은 [Blueprint 진행 기록](../blueprint-progress.md)을 함께 확인한다.
+지형 격자를 만들고 각 셀의 바닥 높이와 지형 종류를 조회·교체하며, 별도 수동 도로 모델인 `Roads`를 보유하는 현재 API다. 이 문서는 `YouSaidLeft.Core`의 소스와 Editor 테스트를 기준으로 작성했다. 실행 결과와 다음 작업은 [Blueprint 진행 기록](../blueprint-progress.md)을 함께 확인한다.
 
 ## 구현 범위와 설계 방향
 
-현재 `CreateBlueprint`는 **Grass 평지 생성 → 높이 적용 → 공통 수면 아래 셀을 Water로 분류**한다. 경사 타일, 도로 연결, 출발지·목적지, 건물, 터널형 동굴, 교량·고가도로, 장식물, 입체 도로망, 종이 지도와 3D 도시 조립은 이 API에 구현되지 않았다. `ApplyTraits`는 비어 있는 private 메서드이고 생성 흐름에서 호출되지 않는다.
+현재 `CreateBlueprint`는 **Grass 평지 생성 → 높이 적용 → 공통 수면 아래 셀을 Water로 분류**한다. 결과의 `Roads`는 비어 있으며, 생성기가 도로를 자동 배치하거나 연결하지 않는다. [RoadLayout API](road-layout.md)는 수동 모듈 배치·경계 노드·내부/외부 연결을 구성하고, `ManualRoadBlueprint.Create()`는 평지·램프·입체교차의 고정 청사진을 만든다. 경사 타일·도로 형상, 출발지·목적지, 건물, 동굴 공간, 장식물, 종이 지도와 3D 도시 조립은 미구현이다. `ApplyTraits`는 비어 있는 private 메서드이고 생성 흐름에서 호출되지 않는다.
 
 청사진을 3D 도시와 지도의 공통 원본으로 쓰는 결정은 [ADR-001](../decisions/ADR-001-blueprint-as-source-of-truth.md), 모듈형 타일 조립 방향은 [ADR-002](../decisions/ADR-002-grid-generation-with-modular-tiles.md), 지형 우선 방향은 [ADR-005](../decisions/ADR-005-terrain-first-generation-with-tunnel-caves.md), 입체 도로망의 후속 계약은 [ADR-006](../decisions/ADR-006-separate-terrain-and-grade-separated-road-network.md), 노드·모듈 배치·포트의 역할과 좌표 계약은 [ADR-007](../decisions/ADR-007-node-module-placement-and-port-contracts.md)에 있다. 이 결정들의 최종 목표와 현재 지형 API를 구분해서 읽는다.
 
 ### 현재 지형 격자와 별도 도로망의 경계
 
 - 현재 `TerrainCell[,]`은 수평 좌표마다 바닥 높이 하나를 저장한다. 터널 내부의 빈 공간이나 같은 위치의 여러 도로 높이를 표현하지 않는다.
-- 별도 [RoadNetwork API](road-network.md)에 ID·수평 좌표·도로 높이를 가진 노드와 명시적 양방향 직접 연결, BFS 도달 여부 조회, 노드 ID별 `RoadPort` 값 저장과 논리 경계 비교가 구현되어 있다. 이 객체를 현재 `Blueprint`가 보유하거나 생성하지는 않는다. 모듈 배치·회전, 로컬 포트 정의와 실제 접속점 계산, 도로 형상·빈 공간과 예약 형식은 아직 없다.
-- ADR-007에서 모듈 배치를 청사진의 원본 데이터로 두고, 배치와 로컬 정의에서 포트 및 대응 노드의 위치·높이를 유도하기로 했다. 이 역할 분리는 현재 `TerrainCell[,]`이나 `RoadNetwork`의 저장 필드를 자동으로 갱신하는 기능이 아니다.
+- `Blueprint.Roads`는 같은 격자 크기의 별도 `RoadLayout`이다. 배치·로컬 포트 정의에서 접속점·끝점 높이와 포트별 경계 노드를 유도하고, 명시한 내부 연결 및 검사한 외부 접속을 구성한다. 내부에서 [RoadNetwork API](road-network.md)의 ID 저장·양방향 연결·BFS를 사용한다. 도로 등록·연결은 지형 셀·수면을 변경하지 않는다.
+- ADR-007의 배치 원본과 포트·경계 노드 대응을 한 셀 무회전 사례로 구현했다. 현재 모델은 경계 노드만 다루며 내부 교차점·회전·멀티셀·프리팹 선택·도로 형상·빈 공간과 예약 형식은 아직 없다. 지형을 직접 바꿔도 도로 배치가 자동으로 이동하거나 재구성되지는 않는다.
 - `GetNeighborCoordinates`는 도로 탐색의 연결 간선이 아니다. 이웃 좌표와 높이가 같아도 도로가 실제로 이어진다는 뜻은 아니다.
 - `TerrainKind.Water`는 현재 생성기의 지형 분류다. 미래 교량·고가 구간의 통행 가능 여부를 아래 셀의 종류만으로 판정하지 않는다.
 - 도로 그래프의 도달 가능성, 자동 생성의 유효성, 모듈 연결·여유 공간, 실제 차량 주행은 각각 검사한다. 그래프 연결만으로 지형 개구부나 콜라이더가 생성되지는 않는다.
 
-다음 구현은 자동 생성기보다 작은 수동 입체 도로 연결 사례부터 시작한다. 단계와 아직 정할 계약은 [작업 현황](../blueprint-progress.md)에 있다.
+수동 평지·램프·입체교차의 논리 연결과 미리보기를 구현했다. 후속 단계와 아직 정할 계약은 [작업 현황](../blueprint-progress.md)에 있다.
 
 | 타입 | 역할 | 소스 |
 |---|---|---|
 | `TerrainKind`, `TerrainCell` | 지형 종류와 셀의 절대 바닥 높이 | [TerrainCell.cs](../../Assets/Scripts/Core/Blueprint/TerrainCell.cs) |
-| `Blueprint` | 크기·기준층·수면 메타데이터와 가변 셀 격자 | [Blueprint.cs](../../Assets/Scripts/Core/Blueprint/Blueprint.cs) |
+| `Blueprint` | 크기·기준층·수면 메타데이터, 가변 셀 격자와 별도 `Roads` | [Blueprint.cs](../../Assets/Scripts/Core/Blueprint/Blueprint.cs) |
+| `RoadLayout`, `ManualRoadBlueprint` | 수동 배치·경계 노드·연결과 고정 논리 사례 | [RoadLayout API](road-layout.md) |
 | `BlueprintGenerator` | 높이차 함수를 적용하고 물을 분류 | [BlueprintGenerator.cs](../../Assets/Scripts/Core/Blueprint/BlueprintGenerator.cs) |
 | `PerlinLevelSampler` | 좌표로부터 Perlin 노이즈 기반 정수 높이차 계산 | [PerlinLevelSampler.cs](../../Assets/Scripts/Core/Blueprint/PerlinLevelSampler.cs) |
 | `TerrainLevelQuantizer` | 노이즈 값을 정수 높이차로 양자화 | [TerrainLevelQuantizer.cs](../../Assets/Scripts/Core/Blueprint/TerrainLevelQuantizer.cs) |
@@ -73,6 +74,7 @@ public class Blueprint
     public readonly int Height;
     public readonly int BaseLevel;
     public readonly int? WaterLevel;
+    public RoadLayout Roads { get; }
 
     public Blueprint(int width, int height, int baseLevel = 0, int? waterLevel = null);
     public bool TryGetCell(int x, int y, out TerrainCell cell);
@@ -83,7 +85,7 @@ public class Blueprint
 
 ### 생성자
 
-`new Blueprint(...)`는 모든 셀을 `new TerrainCell(baseLevel)`로 초기화한다. `waterLevel`을 지정해도 생성자 자체는 물을 분류하지 않으며, 초기 셀은 모두 Grass다. 자동 분류가 필요하면 `BlueprintGenerator.CreateBlueprint`를 사용한다.
+`new Blueprint(...)`는 모든 셀을 `new TerrainCell(baseLevel)`로 초기화하고, 같은 `width`·`height`로 비어 있는 `RoadLayout`을 만든다. `waterLevel`을 지정해도 생성자 자체는 물을 분류하지 않으며, 초기 셀은 모두 Grass다. 자동 분류가 필요하면 `BlueprintGenerator.CreateBlueprint`를 사용한다.
 
 | 입력 | 기본값 | 현재 검사 |
 |---|---|---|
@@ -94,7 +96,9 @@ public class Blueprint
 
 검사는 `width` → `height` → `baseLevel` 순서다. 여러 입력이 잘못되면 앞에서 확인한 입력의 예외가 먼저 발생한다. 양수 크기의 메모리 상한을 별도로 제한하는 로직은 없다.
 
-네 public 필드는 생성 후 바뀌지 않는다. 셀은 `TrySetCell`로 바꿀 수 있으므로 `Blueprint` 전체가 불변 데이터인 것은 아니다. 셀을 바꿔도 `BaseLevel`이나 `WaterLevel`이 다시 계산되지 않는다.
+네 public 필드와 `Roads` 참조는 생성 후 바뀌지 않는다. 셀은 `TrySetCell`로, 도로 구성은 `Roads`의 공개 API로 바꿀 수 있으므로 `Blueprint` 전체가 불변 데이터인 것은 아니다. 셀을 바꿔도 `BaseLevel`·`WaterLevel`이나 도로 배치가 다시 계산되지 않는다.
+
+`Roads`의 배치 셀은 청사진의 수평 범위 안이어야 한다. 도로의 기준·끝점 높이는 지형 `BaseLevel`과 별도이며, 아래 지형의 높이·종류·수면에 맞는지나 차량 여유 공간은 검사하지 않는다. 상세 계약과 예외는 [RoadLayout API](road-layout.md)에 있다.
 
 ### 셀 조회·교체
 
@@ -138,7 +142,7 @@ public Blueprint CreateBlueprint(
 2. 각 좌표에서 높이차 함수를 호출하고, `Level = BaseLevel + 높이차`인 Grass 셀을 저장한다.
 3. `WaterLevel`에 값이 있으면 바닥이 수면보다 낮은 셀만 Water로 바꾼다. 바닥 `Level`은 유지한다. `WaterLevel = null`이면 이 단계를 생략한다.
 
-생성기는 GameObject·씬·프리팹을 만들거나 읽지 않는다. 결과는 지형 데이터이며, 표시와 게임 오브젝트 배치는 소비하는 쪽의 작업이다.
+생성기는 GameObject·씬·프리팹을 만들거나 읽지 않는다. 결과의 지형 데이터와 빈 `Roads`를 반환하며, 표시와 게임 오브젝트 배치는 소비하는 쪽의 작업이다.
 
 현재 높이 순회는 y를 바깥 반복문, x를 안쪽 반복문으로 사용한다. 주입 함수의 호출 순서를 공개 계약으로 검증하는 테스트는 없다. 같은 좌표에서 같은 값을 반환하고 외부 상태를 바꾸지 않는 함수를 사용하면 생성 결과를 이해하고 재현하기 쉽다. 임의의 delegate는 난수 상태나 부수 효과를 가질 수 있으므로, **생성기 자체가 모든 입력 함수에 대해 순수성·재현성을 보장하는 것은 아니다**.
 
@@ -227,26 +231,34 @@ var blueprint = generator.CreateBlueprint(
 
 ## BlueprintSceneDebug 표시 도우미
 
-[BlueprintSceneDebug.cs](../../Assets/Scripts/Helper/BlueprintSceneDebug.cs)는 `YouSaidLeft.Helper`의 `MonoBehaviour`다. Inspector 설정으로 청사진을 생성하고 `OnDrawGizmos`에서 표시한다. Core API와 구분하며, 현재 확인한 내용은 **소스의 표시 로직**이다. 이 문서가 Play Mode·Game View의 실제 표시 검증을 의미하지 않는다.
+[BlueprintSceneDebug.cs](../../Assets/Scripts/Helper/BlueprintSceneDebug.cs)는 `YouSaidLeft.Helper`의 `[ExecuteAlways] MonoBehaviour`다. `OnDrawGizmos`에서 청사진의 지형·도로 기호를 읽어 표시하고, 글자 라벨은 Editor의 `SceneView.duringSceneGui`에서 `Handles`로 그린다. Game View의 Gizmos에는 선·노드·화살표·링이 보이고 글자 라벨은 Scene View에만 표시된다. 실행·화면 확인 기록은 [진행 기록](../blueprint-progress.md#scene-미리보기의-별도-화면-검증)에 별도로 둔다.
 
 | Inspector 필드 | 소스 기본값 | 용도 |
 |---|---|---|
-| `_width`, `_height` | 각각 `32` | 미리보기 격자 크기 |
-| `_baseLevel` | `2` | 기준층 |
-| `_waterLevel` | `4` | 공통 수면. nullable 필드가 아니므로 항상 값이 전달됨 |
-| `_seed` | `980306` | 샘플 원점 생성용 시드 |
+| `_previewMode` | `GeneratedTerrain` | 생성 지형 / 고정 수동 도로 청사진 선택 |
+| `_showLabels` | `true` | ManualRoads의 Editor ID·높이 라벨 |
+| `_width`, `_height` | 각각 `32` | GeneratedTerrain의 격자 크기 |
+| `_baseLevel` | `2` | GeneratedTerrain의 기준층 |
+| `_waterLevel` | `4` | GeneratedTerrain의 공통 수면. nullable 필드가 아니므로 항상 값이 전달됨 |
+| `_seed` | `980306` | GeneratedTerrain의 샘플 원점 생성용 시드 |
 | `_cellSize` | `1f` | 표시할 격자 간격 |
 | `_levelHeight` | `0.2f` | 한 높이 층의 표시 간격 |
 
-미리보기의 샘플러 설정은 소스에 `frequency: 0.125f`, `maxLevelOffset: 8`, `originRange: 256f`로 적혀 있다. `OnValidate`는 캐시된 청사진을 비우고, 다음 `OnDrawGizmos`가 다시 생성한다. 크기·기준층·표시 간격이 조건에 맞지 않으면 그리기를 생략한다.
+GeneratedTerrain의 샘플러 설정은 `frequency: 0.125f`, `maxLevelOffset: 8`, `originRange: 256f`다. ManualRoads는 [ManualRoadBlueprint](road-layout.md#manualroadblueprint)의 `7 × 6` 고정 사례를 별도 캐시에 생성하며 지형 생성용 크기·시드·수면을 사용하지 않는다. `OnEnable`·`OnValidate`가 두 캐시를 비우고 다음 그리기에서 선택한 청사진을 다시 만든다. Editor에서 활성화 시 Scene 라벨 콜백을 구독하고 비활성화 시 해제한다. 표시 간격이 양수가 아니면 두 모드 모두 생략하며, 크기·기준층 검사는 GeneratedTerrain에만 적용한다.
 
-- Grass는 바닥 `Level`에 녹색 채운 큐브로 그린다.
-- Water는 바닥 `Level`에 회색 와이어 큐브를, `WaterLevel`에 파란색 계열 채운 큐브를 따로 그린다.
+- GeneratedTerrain의 Grass는 바닥 `Level`에 녹색 채운 큐브로 그린다.
+- GeneratedTerrain의 Water는 바닥 `Level`에 회색 와이어 큐브를, `WaterLevel`에 파란색 계열 채운 큐브를 따로 그린다.
+- ManualRoads는 지형을 어둡게 표시하고 모듈 배치의 셀 테두리는 회색, 경계 노드는 흰색, 내부 간선은 노란색, 포트 방향 화살표·외부 접속 링은 청록색으로 그린다.
+- 도로 선분·노드는 저장한 `RoadNode`의 좌표·높이를, 화살표는 해석한 포트의 접속점·방향·끝점 높이를 읽는다. 셀 테두리만 배치 셀·기준 높이에서 그리며 별도 표시용 도로 좌표 원본을 두지 않는다.
+- 외부 접속은 같은 위치를 공유하는 서로 다른 노드 ID 사이의 연결이다. 길이 0인 선분 대신 링으로 표시하고, Scene 라벨에 양쪽 ID·높이를 적는다. 연결되지 않은 경계 포트는 `N`·`L`로 노드 ID·끝점 높이를, 모듈은 `M`으로 배치 ID를 표시한다. 외부 접속의 두 포트는 하나의 접속 라벨로 묶어 겹침을 줄인다.
 - 표시 좌표는 로컬 `(x * cellSize, level * levelHeight, y * cellSize)`를 기준으로 한다. 격자 y는 로컬 z 방향에 대응하며, 수직 위치는 `Level`로 정한다.
 - 큐브 두께는 `levelHeight * 0.1f`이고 중심을 두께의 절반만큼 내려 윗면이 해당 층에 놓이도록 계산한다. 가로·세로 크기는 `cellSize * 0.95f`다.
-- `transform.localToWorldMatrix`로 표시하고, 작업 후 이전 `Gizmos.color`와 `Gizmos.matrix`를 복원한다.
+- `transform.localToWorldMatrix`로 표시하고, 작업 후 이전 `Gizmos.color`·`Gizmos.matrix`와 Editor 라벨의 Handles 상태를 복원한다.
+- Scene View의 전체 Gizmos나 `BlueprintSceneDebug` 타입의 Gizmo를 끄면 라벨도 숨긴다. `_showLabels`는 도로 기호를 유지하면서 라벨만 숨긴다.
 
 이 도우미는 Gizmos를 그린다. 실제 지형 메시·프리팹·콜라이더·물 시스템을 생성하는 기능은 없다. Inspector의 최소값 표시는 Core API의 입력 검증을 대신하지 않는다.
+
+새 [BlueprintRoadPreview 씬](../../Assets/Scenes/BlueprintRoadPreview.unity)은 ManualRoads를 선택한다. 표시 간격·카메라는 미리보기 설정이며 실제 모듈 치수나 차량 주행 가능성을 확정하지 않는다.
 
 ## 테스트 소스와 현재 갭
 
@@ -257,7 +269,8 @@ var blueprint = generator.CreateBlueprint(
 | [BlueprintGeneratorTests.cs](../../Assets/Tests/Editor/BlueprintGeneratorTests.cs) | 직사각 격자 조회, 초기 Grass·기준층, 셀 교체, 범위 밖 조회·교체, 이웃 집합·좌표 예외, 함수 주입·기본 높이차·null 예외, 절대 높이, 수면 아래만 Water, 같은 시드의 높이·종류 비교 |
 | [PerlinLevelSamplerTests.cs](../../Assets/Tests/Editor/PerlinLevelSamplerTests.cs) | 좌표·설정·원점의 샘플값, 선택한 두 시드의 차이, 같은 시드의 조회 순서 변경 |
 | [TerrainLevelQuantizerTests.cs](../../Assets/Tests/Editor/TerrainLevelQuantizerTests.cs) | 층 경계값, 0~1 밖의 유한 노이즈 clamp, 최대 높이차 변경 |
+| [ManualRoadBlueprintTests.cs](../../Assets/Tests/Editor/ManualRoadBlueprintTests.cs) | 도로 등록 후 지형·수면 유지, 수동 평지·램프의 양방향 경로와 입체교차 층 사이 비연결 |
 
 현재 입력 검사와 테스트 범위에는 차이가 있다. 예를 들어 `Blueprint` 생성자의 크기·기준층 예외는 소스에 있지만 해당 테스트 파일에는 그 예외를 검사하는 테스트가 없다. `waterLevel: null`의 자동 분류 생략, 수면 메타데이터만 저장하는 직접 생성, 양쪽 좌표가 동시에 잘못된 경우의 예외 우선순위 등도 위 테스트 파일에서 별도로 검증하지 않는다.
 
-경사·입체 도로망·건물·동굴 공간·교량·고가도로, 목적지 도달 가능성과 최소 단서 보장, 직렬화·온라인 공유, 플랫폼 간 재현성은 현재 지형 API의 검증 범위에 없다. 후속 작업은 [진행 기록](../blueprint-progress.md)에서 하나의 동작으로 좁히고, 테스트로 기대 결과를 먼저 정한다.
+수동 도로의 논리 연결은 별도 [RoadLayout API](road-layout.md#검증과-남은-경계)에서 다룬다. 실제 경사·도로 형상·건물·동굴 공간·교량·고가 구조, 목적지 도달 가능성과 최소 단서 보장, 직렬화·온라인 공유, 플랫폼 간 재현성은 현재 지형 API의 검증 범위에 없다. 후속 작업은 [진행 기록](../blueprint-progress.md)에서 하나의 동작으로 좁히고, 테스트로 기대 결과를 먼저 정한다.

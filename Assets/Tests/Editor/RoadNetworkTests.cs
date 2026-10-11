@@ -9,6 +9,13 @@ namespace YouSaidLeft.Tests
     public class RoadNetworkTests
     {
         [Test]
+        public void 반_칸_접속점_좌표를_손실_없이_보관한다()
+        {
+            var node = new RoadNode(17, new Vector2(2.5f, 5.25f), 1);
+            Assert.That(node.Coordinates, Is.EqualTo(new Vector2(2.5f, 5.25f)));
+        }
+
+        [Test]
         public void 같은_수평_좌표의_다른_높이_도로_노드를_각각_조회한다()
         {
             var network = new RoadNetwork();
@@ -22,11 +29,11 @@ namespace YouSaidLeft.Tests
             Assert.That(network.TryGetNode(42, out var upper), Is.True);
 
             Assert.That(lower.Id, Is.EqualTo(17));
-            Assert.That(lower.Coordinates, Is.EqualTo(new Vector2Int(2, 5)));
+            Assert.That(lower.Coordinates, Is.EqualTo(new Vector2(2, 5)));
             Assert.That(lower.Level, Is.EqualTo(1));
 
             Assert.That(upper.Id, Is.EqualTo(42));
-            Assert.That(upper.Coordinates, Is.EqualTo(new Vector2Int(2, 5)));
+            Assert.That(upper.Coordinates, Is.EqualTo(new Vector2(2, 5)));
             Assert.That(upper.Level, Is.EqualTo(3));
         }
 
@@ -41,7 +48,7 @@ namespace YouSaidLeft.Tests
 
             Assert.That(network.TryGetNode(17, out var original), Is.True);
             Assert.That(original.Id, Is.EqualTo(17));
-            Assert.That(original.Coordinates, Is.EqualTo(new Vector2Int(2, 5)));
+            Assert.That(original.Coordinates, Is.EqualTo(new Vector2(2, 5)));
             Assert.That(original.Level, Is.EqualTo(1));
         }
 
@@ -291,7 +298,7 @@ namespace YouSaidLeft.Tests
             Assert.That(network.HasDirectConnection(90, 17), Is.False);
 
             Assert.That(network.TryGetNode(42, out var middleRoad), Is.True);
-            Assert.That(middleRoad.Coordinates, Is.EqualTo(new Vector2Int(1, 0)));
+            Assert.That(middleRoad.Coordinates, Is.EqualTo(new Vector2(1, 0)));
             Assert.That(middleRoad.Level, Is.EqualTo(3));
 
             AssertTerrain();

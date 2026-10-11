@@ -9,6 +9,10 @@ namespace YouSaidLeft.Core
         public readonly int Height;
         public readonly int BaseLevel;
         public readonly int? WaterLevel;
+        public RoadLayout Roads
+        {
+            get;
+        }
 
         private readonly TerrainCell[,] _cells;
 
@@ -31,6 +35,7 @@ namespace YouSaidLeft.Core
             Height = height;
             BaseLevel = baseLevel;
             WaterLevel = waterLevel;
+            Roads = new RoadLayout(width, height);
 
             _cells = new TerrainCell[width, height];
             for (var y = 0; y < height; y++)

@@ -4,16 +4,16 @@
 
 ## 설계 결정과 현재 API의 구분
 
-2026-10-11 [ADR-007](../decisions/ADR-007-node-module-placement-and-port-contracts.md)에서 다음 역할을 채택했다. 아래는 후속 구현의 기준이며 현재 저장 API가 이미 이 모델을 구현한다는 뜻은 아니다.
+2026-10-11 [ADR-007](../decisions/ADR-007-node-module-placement-and-port-contracts.md)에서 다음 역할을 채택했다. 현재 저장 API와, 그 위에서 수동 배치·경계 노드·연결을 구성하는 [RoadLayout API](road-layout.md)를 구분한다. ADR의 전체 모델을 이미 구현했다는 뜻은 아니다.
 
 - 도로 노드는 그래프의 접속점·교차점·경유점이다. 모듈 배치는 프리팹 선택, 셀 위치, 회전과 기준 높이를 가진 별도 데이터이며 하나의 모듈에 여러 노드와 내부 연결이 있을 수 있다. 간선과 프리팹의 대응도 1:1로 제한하지 않는다.
 - 포트는 모듈의 연결 경계다. 청사진의 모듈 배치와 로컬 포트 정의에서 포트 접속점·방향·절대 경계 높이 및 대응 노드 위치를 계산한다. 씬 `Transform`을 정본으로 삼지 않는다. `CellCoordinates`는 소속 셀 주소이며 실제 접속점 좌표와 구별한다.
 - 각 경계 포트는 접속 노드에 명시적으로 대응한다. 교차로의 중앙 노드는 경계 접속 노드와 구별하고 내부 간선으로 잇는다. 서로 만나는 모듈의 접속 노드는 서로 다른 ID를 유지하며, 호환성을 확인한 뒤 외부 간선을 추가한다. 좌표·높이 일치만으로 ID를 병합하거나 간선을 만들지 않는다.
 - 램프의 양끝 노드는 각 끝점 높이를 가진다. 배치의 기준 높이와 끝점 높이는 서로 다른 의미다. 긴 도로의 경유 노드와 간선은 처음부터 축약하지 않는다.
 
-현재 `RoadNode.Coordinates`와 `RoadPort.CellCoordinates`는 전달한 `Vector2Int` 값을 각각 저장한다. [#9](https://github.com/N0WST4NDUP/You-Said-Left/issues/9)에서 최소 한 셀 배치, 로컬 포트 정의와 무회전 접속점 계산을 구현했다. 접속점은 한 셀을 `1`로 놓은 논리 좌표의 `Vector2`이며 셀 중심은 정수 좌표다. 포트·노드 대응은 아직 없고, 기존 `RoadNode.Coordinates`를 반격자 접속점 좌표로 다시 해석하지 않는다. 회전·멀티셀 모듈, 차로, 비용 최적화, 캐시와 직렬화는 이번 구현 범위에서 제외했다.
+현재 `RoadNode.Coordinates`는 논리 그래프 점인 `Vector2`, `RoadPort.CellCoordinates`는 소속 셀 주소인 `Vector2Int`를 저장한다. [#9](https://github.com/N0WST4NDUP/You-Said-Left/issues/9)에서 최소 한 셀 배치·로컬 포트 정의·무회전 접속점 계산을 구현한 뒤, 수동 `RoadLayout`이 해석한 포트마다 별도 경계 노드를 등록하고 내부·외부 연결을 구성하도록 확장했다. 한 셀은 `1`, 셀 중심은 정수 좌표이며 반 칸은 예시일 뿐 좌표 규격을 그 배수로 제한하지 않는다. 내부 교차점·프리팹 선택·회전·멀티셀, 차로, 비용 최적화, 캐시와 직렬화는 아직 없다.
 
-이 문서의 단계별 Editor 통과 수와 RED·GREEN은 각 시점의 실행 기록이다. 최신 결과는 2026-10-11 현재 소스로 Unity 6000.6.0f1 Editor에서 다시 실행한 전체 124개 통과, 실패·스킵·미결정 0개다. 이 중 무회전 포트 해석 테스트는 24개이며 기존 저장·조회·Matcher 회귀도 함께 통과했다.
+이 문서의 단계별 Editor 통과 수와 RED·GREEN은 각 시점의 실행 기록이다. 최신 결과는 2026-10-11 수동 배치·연결·미리보기 소스로 Unity 6000.6.0f1 Editor에서 실행한 전체 144개 통과, 실패·스킵·미결정 0개다. #9의 124개에 노드 좌표 1개·RoadLayout 15개·ManualRoadBlueprint 4개를 추가했으며, 무회전 포트 해석 24개와 기존 저장·조회·Matcher 회귀도 함께 통과했다.
 
 ## 현재 구현 범위
 
@@ -22,6 +22,7 @@
 - 좌표·높이로 연결을 추론하지 않고 `ConnectBidirectional`로 지정한 직접 연결만 저장한다.
 - `HasPath`는 저장된 연결을 BFS로 탐색해 도달 여부를 bool로 반환한다. 경로 목록이나 거리·시간·건설 비용의 최적 경로를 반환하지 않는다.
 - 노드 ID별로 여러 포트를 보관한다. 조회 결과는 스냅샷이며, 포트 등록은 연결을 추가하지 않는다.
+- `GetNodes()`는 조회 시점의 전체 노드 값을 복사한 스냅샷을 반환한다.
 - `RoadPortResolver.ResolveUnrotated`는 한 셀 배치와 로컬 포트 정의에서 소속 셀·접속점·방향·절대 경계 높이를 반환한다. 노드 등록이나 포트 저장·간선 추가는 하지 않는다.
 - 포트 판정은 아래의 별도 `RoadPortMatcher`에서 경계 높이·반대 방향과 방향에 맞는 바로 이웃 셀을 검사한다. 자동 도로 생성, 경사·실제 포트 형식·공간 검사, 3D 조립과 실제 주행은 아직 구현하지 않았다.
 
@@ -35,14 +36,14 @@
 public readonly struct RoadNode
 {
     public readonly int Id;
-    public readonly Vector2Int Coordinates;
+    public readonly Vector2 Coordinates;
     public readonly int Level;
 
-    public RoadNode(int id, Vector2Int coordinates, int level);
+    public RoadNode(int id, Vector2 coordinates, int level);
 }
 ```
 
-`Id`는 네트워크 안의 노드 식별자이고 목록 인덱스가 아니다. 현재 `Coordinates`는 전달한 정수 수평 좌표, `Level`은 도로의 절대 높이 층을 저장한다. `Level`은 지형 바닥 높이와 별도로 저장하며, Unity 거리로 변환하는 기능은 없다. ADR-007의 노드 위치는 그래프 접속점·교차점·경유점의 위치라는 의미다. #9의 포트 접속점은 별도 `Vector2`로 계산하지만, `RoadNode`의 좌표 표현 변경과 배치에서 노드 위치를 유도·대응하는 API는 아직 구현하지 않았다.
+`Id`는 네트워크 안의 노드 식별자이고 목록 인덱스가 아니다. `Coordinates`는 전달한 `Vector2` 수평 논리 점, `Level`은 도로의 절대 높이 층을 저장한다. `Vector2Int` 생성자 입력은 Unity의 암시적 `Vector2` 변환으로 계속 사용할 수 있으며 저장 결과는 `Vector2`다. 노드와 포트의 실제 접속점은 같은 타입·단위를 쓰지만 포트의 소속 셀 주소와는 구별한다. `Level`은 지형 바닥 높이와 별도로 저장하며 Core에는 Unity 거리 변환이 없다. `RoadLayout`은 해석한 경계 접속점·끝점 높이에서 노드를 만들고, 내부 교차점·경유점의 배치 정의는 아직 구현하지 않았다.
 
 작은 읽기 전용 값 타입으로 저장·조회 시 값이 복사된다. 같은 좌표·높이의 노드도 ID가 다르면 현재 저장 API는 허용한다. 생성자는 ID의 부호, 좌표 범위, 높이 범위를 검사하지 않는다. 이는 검사 부재에 대한 구현 설명이며, 모든 값의 조립·주행 유효성을 보장하지 않는다.
 
@@ -52,6 +53,7 @@ public readonly struct RoadNode
 public class RoadNetwork
 {
     public RoadNetwork();
+    public IReadOnlyList<RoadNode> GetNodes();
     public void AddNode(RoadNode node);
     public bool TryGetNode(int id, out RoadNode node);
     public void ConnectBidirectional(int firstNodeId, int secondNodeId);
@@ -66,6 +68,7 @@ public class RoadNetwork
 |---|---|
 | `AddNode` | ID가 새로우면 추가. 같은 ID가 이미 있으면 `ArgumentException`을 던지고 기존 노드를 유지 |
 | `TryGetNode` | ID를 찾으면 `true`와 노드 값 반환. 없으면 `false`와 `default(RoadNode)` 반환 |
+| `GetNodes` | 내부 노드 목록을 배열로 복사한 스냅샷 반환. 이후 추가나 반환 배열 항목 수정이 내부 저장을 바꾸지 않음 |
 | `ConnectBidirectional` | 두 ID의 노드가 모두 존재하면 두 방향의 직접 연결을 추가. 기존 연결 집합은 유지 |
 | `HasDirectConnection` | 출발 ID의 연결 집합에 도착 ID가 포함되어 있는지 반환. 출발 집합이 없으면 `false` |
 | `HasPath` | 출발·도착 중 없는 ID가 있으면 `false`. 두 ID가 존재하면 저장된 직접 연결을 탐색해 도달 여부 반환. 등록된 노드는 자기 간선 없이 이동 0회로 자기 자신에 도달 |
@@ -94,7 +97,7 @@ public class RoadNetwork
 
 ## 검증한 동작과 남은 경계 사례
 
-포트 등록·조회 단계 전에 완료한 RoadNetwork Editor 테스트는 다음 13개 사례를 검증한다.
+포트 등록·조회 단계 전에 완료한 RoadNetwork Editor 테스트는 다음 13개 사례를 검증한다. 이후 #7의 11개와 수동 배치 단계의 소수 좌표 저장 1개를 더해 현재 RoadNetwork 테스트는 25개다. `GetNodes`의 외부 수정 격리는 [RoadLayoutTests](../../Assets/Tests/Editor/RoadLayoutTests.cs)에서 함께 검사한다.
 
 - 같은 수평 좌표의 서로 다른 높이 노드 저장·조회.
 - 중복 ID 거부와 기존 노드 유지.
@@ -225,7 +228,7 @@ public static class RoadPortResolver
 
 ### 무회전 포트 해석 실행 기록
 
-2026-10-11 현재 소스로 Unity 6000.6.0f1 Editor에서 `unity command run_tests --mode editor --project-path 'D:/01_Application/00_Personal/You Said Left' --format json --timeout 60`을 실행해 전체 124개 통과, 실패·스킵·미결정 0개를 확인했다. 이 중 Resolver 사례는 24개다.
+2026-10-11 #9 완료 시점 소스로 Unity 6000.6.0f1 Editor에서 `unity command run_tests --mode editor --project-path 'D:/01_Application/00_Personal/You Said Left' --format json --timeout 60`을 실행해 전체 124개 통과, 실패·스킵·미결정 0개를 확인했다. 이 중 Resolver 사례는 24개다. 이후 수동 배치 단계의 전체 144개 결과와 화면 검증은 [진행 기록](../blueprint-progress.md#검증-기록과-한계)에 있다.
 
 별도 `unity command eval` 실행 점검에서는 노드 `17`, `42`, `90`, 기존 `17 ↔ 42` 연결과 `17`·`42`의 등록 포트를 가진 메모리 내 네트워크를 구성했다. 정상 해석·NaN·무한대·미정의 방향·상한/하한 오버플로의 6개 입력 각각에서 예상 예외, 원본 배치·정의, 기존 노드·포트 전체 값과 개수, 세 ID 사이 모든 직접 연결·도달 관계의 보존을 확인했다. `ArgumentException.ParamName`도 `definition`이었다. 이 점검은 현재 Editor에서 임시 실행한 근거이며 저장된 자동 테스트나 위 124개에 포함하지 않는다.
 
@@ -241,7 +244,7 @@ public static class RoadPortResolver
 
 ## 노드 ID별 포트 등록·조회
 
-[#7](https://github.com/N0WST4NDUP/You-Said-Left/issues/7)의 저장·조회 계약을 구현하고 검증했다. `ownerNodeId`로 저장 소속을 명시하며 노드·포트의 좌표나 높이로 소속을 추론하지 않는다. 이 Dictionary의 소속 ID는 현재 API의 저장 키다. ADR-007에서 채택한 포트의 모듈 소속과 접속 노드 대응을 모두 표현하지는 않는다. 후속 구현에서는 배치·로컬 정의에서 유도한 값의 일관성과 포트·노드 대응을 별도로 확인하고 내부·외부 간선을 구성한다. 현재 API와 아래의 허용·스냅샷 계약은 이번 문서 갱신으로 변경하지 않았다.
+[#7](https://github.com/N0WST4NDUP/You-Said-Left/issues/7)의 저장·조회 계약을 구현하고 검증했다. `ownerNodeId`로 저장 소속을 명시하며 노드·포트의 좌표나 높이로 소속을 추론하지 않는다. 이 Dictionary의 소속 ID는 현재 API의 저장 키이며, 모듈 배치 소속 모델 전체를 표현하지 않는다. 별도 `RoadLayout`이 배치·로컬 정의에서 포트마다 같은 접속점·높이의 경계 노드를 유도하고 이 저장 API를 사용한다. 내부·외부 접속의 책임도 그 상위 API에 둔다. 아래의 허용·스냅샷 보관 계약은 유지한다.
 
 ### 저장과 스냅샷 계약
 
@@ -253,7 +256,7 @@ public static class RoadPortResolver
 - 포트 값은 읽기 전용 필드로 구성된 값 타입이므로 현재 필드에는 배열 복사로 충분하다. 비어 있지 않은 조회는 호출마다 배열을 할당하고 포트 수만큼 복사한다. 기존 노드 존재 조회는 선형 검색이다. 캐시·성능 측정은 이번 범위에 포함하지 않는다.
 - 논리 경계가 맞는 포트를 등록해도 새 직접 연결이나 경로가 생기지 않고 기존 연결과 경로는 유지된다. `RoadPortMatcher`와 `ConnectBidirectional`의 계약은 유지한다.
 
-이 허용은 값 보관의 계약이며 실제 모듈의 기하·배치·주행 유효성을 뜻하지 않는다. 예를 들어 높이 `1`인 한 저장 소속에 높이 `1`, `2`인 포트를 보관하는 회귀 테스트는 램프 양끝을 하나의 그래프 접속점으로 합치라는 설계가 아니다. ADR-007의 램프는 각 끝점 높이를 가진 별도 노드와 내부 간선을 사용한다. 포트 판정의 간선 적용, 모듈 배치·포트와 노드의 명시적 대응, 삭제·이동과 공간·조립·차량 검증은 후속 범위다.
+이 허용은 값 보관의 계약이며 실제 모듈의 기하·배치·주행 유효성을 뜻하지 않는다. 예를 들어 높이 `1`인 한 저장 소속에 높이 `1`, `2`인 포트를 보관하는 회귀 테스트는 램프 양끝을 하나의 그래프 접속점으로 합치라는 설계가 아니다. `RoadLayout`의 수동 램프는 각 끝점 높이를 가진 별도 노드와 명시한 내부 간선을 사용한다. 포트·경계 노드 대응과 검사한 외부 접속은 [RoadLayout API](road-layout.md)에 구현했으며, 삭제·이동과 공간·조립·차량 검증은 후속 범위다.
 
 ### 실행 기록
 

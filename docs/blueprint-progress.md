@@ -1,13 +1,15 @@
 # 청사진 작업 현황과 다음 세션 안내
 
-기준일: 2026-10-11. 기능 추가 또는 검증 결과가 바뀌면 이 문서를 함께 갱신한다. 현재 API는 [Blueprint API](api/blueprint.md)와 [RoadNetwork API](api/road-network.md), 지형 우선 방향은 [ADR-005](decisions/ADR-005-terrain-first-generation-with-tunnel-caves.md), 입체 도로 연결·공간은 [ADR-006](decisions/ADR-006-separate-terrain-and-grade-separated-road-network.md), 노드·모듈 배치·포트 관계는 [ADR-007](decisions/ADR-007-node-module-placement-and-port-contracts.md)를 따른다. #7의 저장·조회 구현은 `1f00058`, #8의 역할·좌표 원본·연결 책임은 `bfa59dd`에 반영됐다. #9에서 최소 한 셀 배치와 로컬 포트 정의로 무회전 접속점·방향·절대 끝점 높이를 유도했다. 현재 소스로 Editor 전체 124개 GREEN을 다시 확인했다. 회전·멀티셀·노드 대응·간선 구성·공간·조립은 아직 구현하지 않았다.
+기준일: 2026-10-11. 기능 추가 또는 검증 결과가 바뀌면 이 문서를 함께 갱신한다. 현재 API는 [Blueprint API](api/blueprint.md), [RoadNetwork API](api/road-network.md)와 [RoadLayout API](api/road-layout.md)다. 지형 우선 방향은 [ADR-005](decisions/ADR-005-terrain-first-generation-with-tunnel-caves.md), 입체 도로 연결·공간은 [ADR-006](decisions/ADR-006-separate-terrain-and-grade-separated-road-network.md), 노드·모듈 배치·포트 관계는 [ADR-007](decisions/ADR-007-node-module-placement-and-port-contracts.md)를 따른다.
+
+#9의 무회전 포트 해석 이후 `Blueprint.Roads`에 수동 배치·포트별 경계 노드·명시적 내부/외부 연결을 구현했다. `RoadNode.Coordinates`는 논리 접속점 `Vector2`다. 평지·램프·입체교차의 고정 청사진과 새 Scene 미리보기를 추가했고, 현재 소스의 Editor 전체 144개와 저장소 C# 소스 14개 검사를 통과했다. 내부 교차점·프리팹 선택·회전·멀티셀·자동 생성·공간·실제 조립·차량 주행은 후속 범위다.
 
 ## 먼저 읽을 문서
 
 1. [AGENTS.md](../AGENTS.md): AI 작업 범위와 손코딩 원칙.
 2. [이슈 단위 작업과 TDD](development-workflow.md): 범위·검증 조건, 완료 경계에서의 커밋 추천.
 3. 이 문서: 현재 구현, 검증 범위와 바로 이어갈 작업.
-4. [Blueprint API](api/blueprint.md)와 [RoadNetwork API](api/road-network.md): 현재 지형 생성·샘플링과 도로 저장·직접 연결 계약.
+4. [Blueprint API](api/blueprint.md), [RoadNetwork API](api/road-network.md), [RoadLayout API](api/road-layout.md): 지형 생성·샘플링, 도로 저장·조회와 수동 배치·경계 노드·내부/외부 연결 계약.
 5. [ADR-006](decisions/ADR-006-separate-terrain-and-grade-separated-road-network.md): 현재 지형 격자와 미래 입체 도로망의 구분, 생성 순서와 미해결 항목.
 6. [ADR-007](decisions/ADR-007-node-module-placement-and-port-contracts.md): 노드·배치·포트의 역할, 좌표·높이 원본, 현재 저장 API와 후속 구현의 구분.
 7. [ADR 색인](decisions/README.md)과 [GDD](GDD.md): 확정 결정과 제안 구분. 과거 에셋 조사 제한은 ADR-007의 변경 경위와 현재 AGENTS.md를 기준으로 읽는다.
@@ -32,25 +34,28 @@
 
 | 구성 | 소스에서 확인한 상태 |
 |---|---|
-| `Blueprint` | 크기·기준 높이·선택적 수면을 저장하는 class. `TerrainCell[,]`과 셀 조회·교체, 범위 안 상하좌우 이웃 좌표 조회 제공 |
+| `Blueprint` | 크기·기준 높이·선택적 수면, `TerrainCell[,]`과 같은 크기의 별도 `RoadLayout`인 `Roads` 보관. 셀 조회·교체와 범위 안 상하좌우 이웃 좌표 제공 |
 | `TerrainCell` / `TerrainKind` | `readonly struct`인 셀에 절대 높이 층과 Grass/Water 종류 저장 |
 | `BlueprintGenerator` | Grass 초기화 → 주입한 샘플러로 높이 적용 → 수면보다 낮은 셀만 Water로 분류 |
 | `PerlinLevelSampler` | Perlin 샘플을 정수 높이 오프셋으로 변환. 시드는 샘플링 원점 선택에 사용 |
 | `TerrainLevelQuantizer` | 유한한 노이즈와 정상적인 최대 오프셋 입력을 정수 높이 구간으로 변환 |
-| `BlueprintSceneDebug` | Scene Gizmos로 초록 지형, 연하늘 수면과 회색 물속 바닥 테두리를 표시하는 코드 존재 |
-| `RoadNode` / `RoadNetwork` | 읽기 전용 노드의 ID·수평 좌표·절대 도로 높이 저장, ID 조회, 중복 ID 거부, 명시적 양방향 직접 연결 저장·조회, BFS 도달 여부 조회. 노드 ID별 포트 등록·스냅샷 조회, 없는 소속 ID의 예외·상태 보존 |
+| `BlueprintSceneDebug` | 기본 GeneratedTerrain 모드 보존. ManualRoads에서 고정 청사진의 배치 테두리·경계 노드·내부 간선·외부 접속 링·방향 화살표와 Editor ID·높이 라벨 표시 |
+| `RoadNode` / `RoadNetwork` | 읽기 전용 ID·`Vector2` 논리 수평 점·절대 도로 높이 저장. 노드 스냅샷·ID 조회, 중복 ID 거부, 명시적 양방향 직접 연결·BFS 도달 여부. 노드 ID별 포트 스냅샷과 없는 ID의 예외·상태 보존 |
 | `RoadPortSide` / `RoadPort` / `RoadPortMatcher` | 네 수평 격자 방향과 읽기 전용 셀 주소·방향·경계 높이 저장. 같은 높이, X·Y축 반대 방향과 그 방향에 맞는 바로 이웃 셀 검사 |
 | `RoadModulePlacement` / `RoadPortDefinition` | 읽기 전용 한 셀 주소·기준 높이와 로컬 `Vector2` 위치·방향·상대 높이 저장. 생성자는 값만 보관 |
 | `ResolvedRoadPort` / `RoadPortResolver` | 한 셀 무회전 포트의 소속 셀·논리 접속점·방향·절대 경계 높이 반환. NaN·무한대·미정의 방향은 `ArgumentException`, 높이합 오버플로는 `OverflowException` |
+| `RoadLayout` / `PlacedRoadModule` | 정의 배열 복사, 배치에서 포트별 별도 경계 노드 유도, 요청한 내부 연결과 정확한 접속점·Matcher로 검사한 외부 연결. 같은 위치 자동 병합·자동 접속 없음 |
+| `RoadConnection` | 양방향 간선의 표시 항목. `IsExternal`로 내부 통행과 같은 위치의 외부 접속 구분. 중복·역방향 요청은 한 항목 유지 |
+| `ManualRoadBlueprint` | 높이 0 Grass `7 × 6`, 모듈 7개·경계 노드 14개·고유 간선 10개. 평지·높이 1→2 램프·같은 셀 높이 1/3의 비연결 입체교차 |
 
 현재 코드는 [Core/Blueprint](../Assets/Scripts/Core/Blueprint)와 [BlueprintSceneDebug.cs](../Assets/Scripts/Helper/BlueprintSceneDebug.cs)에 있다. 기존 지형 구현의 기준점은 `c6ca90d`, 도로 노드·연결·도달 조회와 입체교차·램프 검증의 기준점은 `0048f16`이다. 디버그 컴포넌트가 존재한다는 사실과 실제 화면 확인은 별개다.
 
 ### 아직 구현하지 않은 것
 
 - 경사 모양·방향과 조립 가능한 높이 경계 제약.
-- 출발지·목적지, 필수 경로 예약, 건물·도로·장식 배치.
-- 프리팹 선택·배치 ID·회전·멀티셀을 포함한 모듈 배치 모델, 배치에서 노드 위치 유도와 포트·경계 노드 대응, 내부 통행 정의와 검사한 외부 접속의 간선 적용. #9의 한 셀 무회전 포트 해석은 구현했지만 이 후속 구성은 아직 없다.
-- 중복·자기 연결 등 남은 입력 경계의 정책·검증, 경로 목록·비용 최적화, 도로 형상·포트 형식 및 실제 조립 위치·높이 검증. 멀티셀 모듈·차로 AI·캐시·직렬화는 후속 범위다.
+- 출발지·목적지, 필수 경로 예약, 건물·도로·장식의 자동 배치.
+- 내부 교차점·경유점과 허용 통행을 담는 별도 모듈 정의, 프리팹 선택·회전·멀티셀 배치. 현재는 한 셀 배치 ID·복사한 포트 정의·경계 노드와 호출자가 명시한 내부 간선의 최소 모델이다.
+- 내부 자기 연결 등 남은 입력 경계의 게임 정책·검증, 경로 목록·비용 최적화, 도로 형식·폭·단면과 실제 조립 위치·높이 검증. 차로 AI·캐시·직렬화는 후속 범위다.
 - 터널의 지하 연결·빈 공간, 교량·고가도로·램프와 3D 점유·여유 공간의 데이터 및 조립.
 - 실제 도시 조립기와 종이 지도 렌더러.
 - 바다·호수 구분, 강·물 흐름.
@@ -60,12 +65,18 @@
 
 ## 검증 기록과 한계
 
-- 2026-10-11 #9의 현재 소스로 Unity 6000.6.0f1 Editor에서 `unity command run_tests --mode editor --project-path 'D:/01_Application/00_Personal/You Said Left' --format json --timeout 60`을 실행했다. 전체 124개 통과, 실패·스킵·미결정 0개이며 Resolver 24개와 기존 저장·스냅샷·누락 ID·Matcher 회귀를 포함한다. 정상 유도·이동·네 방향·상대 높이·음수 입력·임의 유한 로컬 위치, NaN·무한대·미정의 방향과 양방향 높이 오버플로를 검증했다.
+- **최신 실행 (2026-10-11 수동 배치 단계)**: Unity 6000.6.0f1 Editor 전체 144개 통과, 실패·스킵·미결정 0개. #9 완료 시점 124개에 소수 좌표 노드 1개, RoadLayout 15개, ManualRoadBlueprint 4개를 추가했다. 기존 저장·포트 스냅샷·Matcher·Resolver 회귀도 함께 통과했다.
+- 이번 20개 추가 사례는 포트와 경계 노드의 점·높이 대응, 원본 정의 배열 격리, 세 조회 스냅샷, 명시적 내부·외부 연결·별도 ID 유지, 미정의 모듈·인덱스와 해석 실패 후 상태 보존, 정확한 외부 접속점 비교·거부 후 내부 경로 유지, 수동 평지·램프·입체교차와 지형·수면 보존을 확인했다. 상세 범위와 아직 별도 테스트가 없는 입력은 [RoadLayout API](api/road-layout.md#검증과-남은-경계)에 있다. 새로운 동작의 AI 구현·검증 기록이며 이전 사용자 TDD의 RED·GREEN과 섞지 않는다.
+- 이번 `dotnet run --project tools/RepositoryChecks --no-restore -- lint --all`은 C# 소스 14개 검사, 구문·규칙 위반 0개였다. Editor 테스트 파일·씬 표시·실제 주행은 저장소 검사와 별도로 확인한다.
+- 최종 라벨 배치 수정 후에도 Editor 전체 144개 통과, 실패·스킵·미결정 0개와 C# 소스 14개 검사·규칙 위반 0개를 다시 확인했다. 새 수동 미리보기 씬의 Scene View 실제 GUI 캡처에서 평지·램프·높이 1/3의 입체교차와 배치·노드·높이·접속 라벨을 확인했다. Play Mode의 Game View 화면 캡처(`source=screen`, `1600 × 1000`)에서도 지형·노드·포트 화살표·내부 선분·외부 접속 링을 확인했고 Console 오류·경고는 0개였다. 이 확인은 논리 데이터의 Gizmos 표시이며 실제 프리팹·콜라이더 조립이나 차량 주행 검증은 아니다.
+- 독립 리뷰에서 타입별 Gizmo를 끌 때 Scene 라벨이 남는 문제를 찾아 표시 가드를 추가했다. 실제 타입 토글을 끈 캡처에서 도형·라벨 모두 숨겨진 것을 확인하고 원래 켜진 상태로 복구했다. 이 최종 수정 후에도 Editor 144개·C# 소스 14개 검사와 Play Mode/Game View 재검증을 통과했고 Console 오류·경고는 0개였다.
+- 수동 배치 단계의 API·작업 현황 문서 5개를 현재 소스·테스트와 대조했고, 상대 링크 100개·헤딩 앵커 12개·표 23개와 코드 블록·공백 검사를 통과했다. 기존 #9의 124개·RED/GREEN은 당시 기록으로 보존했으며 Accepted ADR 본문은 변경하지 않았다.
+- 2026-10-11 #9 완료 시점 소스로 Unity 6000.6.0f1 Editor에서 `unity command run_tests --mode editor --project-path 'D:/01_Application/00_Personal/You Said Left' --format json --timeout 60`을 실행했다. 전체 124개 통과, 실패·스킵·미결정 0개이며 Resolver 24개와 기존 저장·스냅샷·누락 ID·Matcher 회귀를 포함한다. 정상 유도·이동·네 방향·상대 높이·음수 입력·임의 유한 로컬 위치, NaN·무한대·미정의 방향과 양방향 높이 오버플로를 검증했다.
 - 높이 오버플로 단계는 AI가 전체 118개 중 116개 통과·2개 실패의 RED를 직접 확인했다. 실패 원인은 기대한 `OverflowException`이 발생하지 않은 것이었다. 사용자 `checked` 구현 후 118개 GREEN, 정상 높이 경계 4개 추가 후 122개 회귀 GREEN, 음수 셀·임의 로컬 위치 2개 추가 후 124개 회귀 GREEN을 확인했다. 다른 단계의 RED 보고와 AI 재실행 결과는 [API 실행 기록](api/road-network.md#무회전-포트-해석-실행-기록)에 구분했다.
 - #9 관련 문서 4개의 상대 링크 71개·헤딩 앵커 4개·표 19개와 코드 블록을 검사하고 `git diff --check`를 통과했다. ADR-007은 이동한 소스 링크 두 곳만 갱신했으며 Accepted 결정 본문은 보존했다. 문서 리뷰에서 실행 기록의 중복 제목으로 기존 #7 링크가 새 #9 기록을 가리키던 문제를 고유한 제목으로 바로잡았다.
 - #9 코드 리뷰에서 해석·입력 검증의 미해결 결함을 찾지 못했다. 입력은 참조 필드가 없는 읽기 전용 값 타입이며 Resolver는 네트워크·외부 상태를 참조하지 않는다. `RoadPort.cs`·`RoadPortMatcher.cs`와 각각의 `.meta`는 `RoadPort/` 폴더로 이동했으며 HEAD `bfa59dd`와 Git blob이 모두 같아 기존 코드·GUID를 보존했다.
 - 별도 `unity command eval` 실행 점검은 노드 `17`, `42`, `90`, 기존 `17 ↔ 42` 연결과 두 소속의 등록 포트를 고정했다. 정상·NaN·무한대·미정의 방향·상한/하한 오버플로 6개 입력 모두 예상 예외와 원본 입력·기존 노드·포트 값 및 개수·전체 직접 연결/도달 관계를 유지했다. 이는 임시 Editor 실행 근거이며 저장된 자동 테스트 124개와 구분한다. `ArgumentException.ParamName`도 `definition`으로 확인했다.
-- `dotnet run --project tools/RepositoryChecks --no-restore -- lint --all`은 C# 소스 12개 검사, 구문·규칙 위반 0개였다. Editor 테스트 파일은 이 검사 범위 밖이며 실제 Editor 실행으로 별도 검증했다.
+- #9 완료 시점의 `dotnet run --project tools/RepositoryChecks --no-restore -- lint --all`은 C# 소스 12개 검사, 구문·규칙 위반 0개였다. Editor 테스트 파일은 이 검사 범위 밖이며 실제 Editor 실행으로 별도 검증했다.
 - 2026-10-11 #8 문서 범위는 현재 소스와 GitHub 이슈 본문·수동 사례를 대조하고 독립 리뷰했다. 수정이 필요한 모순·누락은 찾지 못했다. PowerShell로 변경 문서 8개의 상대 링크 115개·헤딩 앵커 3개, 표 열 수·코드 블록·ADR 갭 개수를 검사했고 `git diff --check`도 통과했다. 게임 코드·테스트·씬·에셋은 변경하지 않았으며 Unity 테스트·Play Mode·Game View는 이번 문서 갱신에서 실행하지 않았다.
 - [BlueprintGeneratorTests.cs](../Assets/Tests/Editor/BlueprintGeneratorTests.cs), [PerlinLevelSamplerTests.cs](../Assets/Tests/Editor/PerlinLevelSamplerTests.cs), [TerrainLevelQuantizerTests.cs](../Assets/Tests/Editor/TerrainLevelQuantizerTests.cs)에 지형 데이터, 생성기, 양자화와 샘플러의 Editor 테스트가 있다.
 - 같은 시드 재현 테스트는 새 샘플러와 생성기를 각각 만들어 두 청사진의 높이·종류를 비교한다. 검증용 고정 설정에서 물과 육지가 모두 있는지도 검사한다. 모든 시드에서 물과 육지가 공존한다는 보장은 아니다.
@@ -95,17 +106,17 @@
 
 ## 바로 이어갈 작업
 
-시작 전에 관련 이슈에서 이번 범위·제외 범위·검증 조건을 정한다. 아래 후보를 모두 한 이슈에 묶거나 순서대로 자동 진행하지 않는다. 없는 노드 연결의 상태 보존, 포트 소속 표현, 판정 후 연결 적용처럼 독립적으로 검증할 작업으로 나누고, 각 작업의 완료 조건과 필요한 검증·리뷰·문서 갱신을 마치면 다음 작업에 앞서 커밋을 추천한다. 큰 청사진 목표는 상위 이슈로 추적할 수 있으며, 하위 작업 완료와 상위 목표 완료를 구분한다. 실제 이슈 등록·변경과 커밋은 사용자 요청 범위를 따른다.
+수동 배치·연결·미리보기는 사용자가 AI 구현과 로컬 커밋을 명시적으로 요청한 [#5](https://github.com/N0WST4NDUP/You-Said-Left/issues/5)의 독립 범위다. 이 변경은 `Refs: #5`로 추적하며 새 이슈 등록을 선행조건으로 두지 않는다. 상위 #5의 자동 생성 전체 완료나 종료와 구분한다. 필요한 검증·리뷰·문서 갱신을 마친 뒤 요청한 로컬 커밋까지 진행하며 푸시는 별도 요청 범위다.
 
-[#6](https://github.com/N0WST4NDUP/You-Said-Left/issues/6)의 검증은 `ec7a6ce`, [#7](https://github.com/N0WST4NDUP/You-Said-Left/issues/7)의 포트 저장·조회는 `1f00058`에 반영됐다. [#8](https://github.com/N0WST4NDUP/You-Said-Left/issues/8)의 역할·좌표·연결 책임은 ADR-007 / `bfa59dd`로 합의했다. [#9](https://github.com/N0WST4NDUP/You-Said-Left/issues/9)의 한 셀 무회전 포트 해석은 현재 작업 트리에 있으며 아직 커밋하지 않았다. 이 독립 범위의 검증·리뷰·문서 확인을 마치면 먼저 커밋을 추천한다. 다음 구현은 별도 지시에 따라 범위를 정하며, 한 노드가 한 타일이라는 가정으로 기존 저장 API를 리팩터링하지 않는다. 실제 커밋·푸시·이슈 종료는 사용자 요청 범위를 따른다.
+[#6](https://github.com/N0WST4NDUP/You-Said-Left/issues/6)의 검증은 `ec7a6ce`, [#7](https://github.com/N0WST4NDUP/You-Said-Left/issues/7)의 포트 저장·조회는 `1f00058`에 반영됐다. [#8](https://github.com/N0WST4NDUP/You-Said-Left/issues/8)의 역할·좌표·연결 책임은 ADR-007 / `bfa59dd`로 합의했고 [#9](https://github.com/N0WST4NDUP/You-Said-Left/issues/9)의 무회전 포트 해석은 `4f843aa`에 반영됐다. 다음 기능은 별도 사용자 지시에 따라 독립 범위·제외 범위·검증 조건을 정한다. 한 노드가 한 타일이라는 가정으로 기존 저장 API를 리팩터링하지 않는다.
 
 ### #8: 채택한 설계와 다음 구현 경계
 
 ADR-007의 역할·좌표·높이 표와 평지 직선·교차로·입체교차·램프·같은 위치의 여러 ID·회전 사례를 기준으로 삼는다. 셀 주소와 접속점 좌표를 구분하므로 `Coordinates`와 `CellCoordinates`가 항상 같아야 하는 것은 아니다. 경계 노드와 해석한 포트 접속점은 같은 점·높이를 가져야 하며, 이를 만드는 단계가 일관성을 검사한다. 현재 #7의 임의 불일치 값 보관은 그 검사를 이미 구현했다는 뜻이 아니다.
 
-#9에서 첫 후보였던 **한 셀 배치와 로컬 포트 정의의 무회전 해석**을 구현했다. 접속점은 한 셀을 `1`로 놓은 `Vector2`, 셀 중심은 정수 좌표, 높이는 `int` 층이며 생성자는 저장만 하고 Resolver가 입력을 검증한다. 정상 결과·예외·정수 경계의 계약은 [RoadNetwork API](api/road-network.md#한-셀-배치의-무회전-포트-해석)에 있다. 현재 `RoadNode.Coordinates`의 `Vector2Int`를 반 칸 경계 점 표현으로 바꾸지는 않았다.
+#9에서 첫 후보였던 **한 셀 배치와 로컬 포트 정의의 무회전 해석**을 구현했다. 접속점은 한 셀을 `1`로 놓은 `Vector2`, 셀 중심은 정수 좌표, 높이는 `int` 층이며 생성자는 저장만 하고 Resolver가 입력을 검증한다. 정상 결과·예외·정수 경계의 계약은 [RoadNetwork API](api/road-network.md#한-셀-배치의-무회전-포트-해석)에 있다. 이어 수동 배치 단계에서 `RoadNode.Coordinates`도 `Vector2`로 바꾸고 해석한 포트의 점·높이에서 경계 노드를 유도했다. 이는 기존 정수 값을 반격자 정수 인코딩으로 재해석한 변경이 아니다.
 
-후속 후보는 회전의 축·부호와 지원 범위를 먼저 정한 회전 해석, 포트·경계 노드 대응, 내부 통행, 검사한 외부 접속이다. 각각 독립 범위로 정하며 이번 커밋 추천 전에 자동 확장하지 않는다. 무회전 포트 결과나 기존 Matcher 통과만으로 실제 모듈의 조립·주행 유효성을 보장하지 않는다.
+포트별 경계 노드 대응·호출자가 명시한 내부 연결·검사한 외부 접속은 구현했다. 후속 후보는 내부 교차점·허용 통행 정의, 프리팹 선택과 실제 포트 형식, 회전의 축·부호와 지원 범위를 먼저 정한 회전 해석, 공간·조립 검증이다. 현재 독립 범위를 마친 뒤 다음 사용자 지시에 따라 하나만 선택한다. 무회전 결과·논리 접속 성공·미리보기 표시만으로 실제 모듈의 조립·주행 유효성을 보장하지 않는다.
 
 ### Imported 터널 조사와 남은 확인
 
@@ -127,17 +138,24 @@ TDD 실행의 상세 기록은 [RoadNetwork API](api/road-network.md#실행-기�
 
 ### Scene 미리보기의 별도 화면 검증
 
-Scene 미리보기는 아직 화면 검증으로 남아 있다. 기본 디버그 설정은 소스 기준 `32 × 32`, `BaseLevel = 2`, `WaterLevel = 4`, `seed = 980306`이다. Scene에 저장된 Inspector 값은 다를 수 있으므로 직접 확인한다.
+새 [BlueprintRoadPreview 씬](../Assets/Scenes/BlueprintRoadPreview.unity)은 ManualRoads 모드에서 `ManualRoadBlueprint.Create()`의 고정 사례를 읽는다. 기본 GeneratedTerrain 모드와 설정은 `32 × 32`, `BaseLevel = 2`, `WaterLevel = 4`, `seed = 980306`으로 보존했다. Scene에 저장된 Inspector 값은 다를 수 있으므로 소스 기본값과 구분한다.
+
+2026-10-11 최종 Scene View GUI 캡처에서 평지의 경계 접속, 높이 1→2 램프와 같은 셀의 높이 1/3 입체교차를 확인했다. 회색 셀 테두리·흰 노드·노란 내부 선분·청록색 화살표와 접속 링을 구별하고, `M{id}`, `N{id}/L{level}`, `N{first}↔{second}/L{level}` 라벨로 같은 접속점의 별도 노드 ID를 읽었다. Editor 라벨은 Scene View에만 표시되며 `[ExecuteAlways]`와 `SceneView.duringSceneGui` 구독으로 편집 모드에서도 그린다.
+
+Play Mode·Game View에서도 실제 화면 캡처로 동일한 논리 기호를 확인했다. 캡처는 `1600 × 1000` 화면이며 Console 오류·경고는 0개였다. 검증 후 Play Mode를 종료하고 미리보기 씬을 저장했다. 임시 캡처 에셋은 Editor의 AssetDatabase로 삭제했다. 글자 라벨을 Game View UI로 구현하거나 차량으로 도로를 주행한 결과는 아니다.
+
+미리보기 확인 기준은 다음과 같다. GeneratedTerrain의 물·캐시 변경 기준은 수동 도로 화면 검증과 별개다.
 
 - Scene의 Gizmos와 컴포넌트 표시가 켜져 있는지 확인한다.
 - Grass 윗면이 `cell.Level`에, Water 윗면이 공통 `WaterLevel`에 맞는지 확인한다.
 - 물속 바닥은 셀마다 다른 높이를 가질 수 있고, 수면은 같은 높이에 놓이는지 확인한다.
 - Inspector의 크기·시드·수면을 바꿨을 때 캐시를 비우고 다음 그리기에서 다시 생성하는지 확인한다.
 - 미리보기 배율은 셀 크기 `1`, 높이 층 `0.2`가 기본이다. 실제 모듈 조립 치수가 아니다.
+- ManualRoads의 셀 테두리·노드·선분·접속 링·포트 방향을 동일한 표시 변환에서 확인한다. 외부 접속 노드는 같은 위치에 별도 ID로 존재하므로 링과 ID 라벨을 함께 읽는다.
 
 ### 수동 입체교차와 램프 검증
 
-자동 도로 생성이나 동굴 생성 알고리즘부터 구현하지 않는다. `RoadNode`와 `RoadNetwork`의 노드 저장·조회 및 직접 연결 계약은 구현·검증했다. 다음 API는 테스트로 한 동작씩 정하고 사용자가 직접 구현한다.
+아래는 기존 `RoadNode`·`RoadNetwork`의 수동 그래프 검증 기록이다. 이번 `RoadLayout`의 배치·포트에서 유도한 평지·램프·입체교차 사례와 구분한다. 자동 도로 생성이나 동굴 생성 알고리즘은 아직 구현하지 않았다.
 
 `HasPath(int startNodeId, int destinationNodeId)`의 최소 BFS 구현, 큐에 넣을 때 방문하는 개선과 등록된 노드에 한정한 자기 도달은 GREEN을 확인했다. 출발·도착 ID를 탐색 전에 검사하고 반복문에서는 ID 비교만 하도록 정리했다. `HasPath(17, 999)`와 `HasPath(999, 17)`처럼 한쪽 ID만 없는 조회도 기존 자기 도달 테스트에 추가해 GREEN을 확인했다.
 
@@ -192,7 +210,7 @@ Scene 미리보기는 아직 화면 검증으로 남아 있다. 기본 디버그
 - `TryGetNode(42, out ...)`의 성공과 도로 좌표 `(1, 0)`, 높이 `3`을 확인한다.
 - 모든 지형 셀의 조회 성공, 바닥 `[3, 0, 3]`과 종류 `[Grass, Water, Grass]`, 공통 수면 `2`가 연결 후에도 유지되는지 확인한다.
 
-이 테스트를 작성·실행해 GREEN을 확인했다. 현재 `RoadNetwork`와 `Blueprint`는 서로를 참조하지 않으므로 검증 범위는 두 데이터를 별도로 보관하는 고정 사례다. 물을 고려한 배치 검사, 교량 생성·형상·공간 유효성이나 실제 주행의 검증으로 해석하지 않는다.
+이 테스트를 작성·실행해 GREEN을 확인했다. 여기서는 별도로 만든 `RoadNetwork`와 지형 `Blueprint`를 사용하며 검증 범위는 두 데이터를 별도로 보관하는 고정 사례다. 이후 `Blueprint.Roads`를 통한 도로 등록 후 지형·수면 보존도 별도 테스트로 확인했다. 물을 고려한 배치 검사, 교량 생성·형상·공간 유효성이나 실제 주행의 검증으로 해석하지 않는다.
 
 ### 현재 계약: 논리 격자 경계의 접속 후보
 
@@ -233,7 +251,7 @@ Scene 미리보기는 아직 화면 검증으로 남아 있다. 기본 디버그
 | 단계 | 확인할 한 가지 동작 |
 |---|---|
 | 연결 입력 경계 — 검증 완료 | 없는 노드를 연결하면 예외가 발생하고 기존 연결을 유지하며 잘못된 직접 연결은 저장되지 않음. 첫 번째·두 번째·양쪽 ID 부재의 세 회귀 사례 GREEN |
-| 배치와 연결 적용 | 노드 ID별 포트 보관·조회는 #7에서 검증 완료. #8/ADR-007의 배치·포트·노드 대응을 구현한 뒤, 내부 통행과 검사한 외부 접속을 별도 계약으로 적용. 실제 도로 형식·공간은 별도 검사 |
+| 한 셀 수동 배치와 연결 적용 — 검증 완료 | #9의 해석과 ADR-007에 따라 포트별 경계 노드·명시적 내부 연결·정확 비교 외부 접속 구성. 내부 교차점·허용 통행 정의·실제 도로 형식·공간은 후속 범위 |
 | 터널과 점유 공간 | 빈 통로와 위쪽 고체 지형을 함께 표현하고 차량 여유 공간·구조물 공간 충돌을 검사함 |
 | 예약과 생성 | 주행 가능한 필수 경로 공간을 예약하고 건물·도로·장식 배치 후에도 연결·공간 조건을 유지함 |
 | 조립과 지도 | Play Mode·Game View에서 실제 주행하고 같은 청사진의 지도와 대조함 |
@@ -249,7 +267,7 @@ Scene 미리보기는 아직 화면 검증으로 남아 있다. 기본 디버그
 | 항목 | 결정 시점 |
 |---|---|
 | 자연 동굴 선생성 후 도로 활용 / 도로 계획 중 터널 생성 / 둘의 병행, 가져올 Minecraft 생성 요소 | 자연 동굴 생성 단계 시작 전. 첫 수동 입체교차 테스트는 이 선택과 독립적으로 진행 가능 |
-| 논리 회전과 Unity 축·회전 부호의 대응, 회전 지원 범위와 노드 접속점 표현 | 해당 후속 TDD 범위를 시작하기 전. #9의 무회전 접속점 타입·단위·최소 API·오류 계약은 확정·구현됨 |
+| 논리 회전과 Unity 축·회전 부호의 대응, 회전 지원 범위 | 해당 후속 범위를 시작하기 전. 접속점·경계 노드는 셀 단위 `Vector2`, 높이는 `int`로 구현했으며 디버그 축 대응은 실제 조립 회전 계약과 구별 |
 | 모듈 지원 범위·포트·경사·폭·곡률·여유 공간·터널 개구부와 충돌 조건 | 현재 허용된 에셋 조사와 Editor 조립을 대조해 실제 조립·주행 단계 전 확보. 논리 예시를 실제 프리팹 규격으로 사용하지 않음 |
 | 빈 공간·예약 저장 형식 | 터널 공간·예약 단계 시작 전 해당 계약 추가 |
 | 우회·경사·터널·교량 선택, 지형 보정 허용 범위, 재시도·실패 보고 | 필수 경로 예약·자동 생성 단계 시작 전. 유효하지 않은 연결을 성공 결과로 내보내지 않음 |
@@ -257,6 +275,6 @@ Scene 미리보기는 아직 화면 검증으로 남아 있다. 기본 디버그
 
 ## 작업 방식
 
-사용자는 테스트와 게임 코드를 직접 작성한다. 테스트 작성 → RED 확인 → 최소 구현 → GREEN 확인 → 테스트 빈틈과 경계 사례 리뷰 순서로 진행한다. AI는 설계·개념 설명·디버깅·리뷰를 기본으로 하고, 명시적으로 요청받은 범위의 코드만 수정한다.
+기본은 사용자 손코딩과 한 동작씩의 테스트 작성 → RED 확인 → 최소 구현 → GREEN 확인 → 테스트 빈틈과 경계 사례 리뷰다. AI는 설계·개념 설명·디버깅·리뷰를 기본으로 하고, 명시적으로 요청받은 범위의 코드만 수정한다. 이번 수동 배치·연결·미리보기는 사용자의 명시적 구현 요청 범위이며 기본 원칙을 다른 작업의 일괄 작성 권한으로 확장하지 않는다.
 
 다음 세션에서는 먼저 최신 Git 상태와 소스를 확인한다. 이 문서의 기록을 현재 실행 결과로 간주하지 않는다. 커밋과 푸시는 각각 요청된 범위에서만 수행한다.

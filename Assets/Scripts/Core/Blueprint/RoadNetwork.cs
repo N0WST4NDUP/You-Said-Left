@@ -7,11 +7,11 @@ namespace YouSaidLeft.Core
     public readonly struct RoadNode
     {
         public readonly int Id;
-        public readonly Vector2Int Coordinates;
+        public readonly Vector2 Coordinates;
         public readonly int Level;
 
 
-        public RoadNode(int id, Vector2Int coordinates, int level)
+        public RoadNode(int id, Vector2 coordinates, int level)
         {
             Id = id;
             Coordinates = coordinates;
@@ -33,6 +33,8 @@ namespace YouSaidLeft.Core
         }
 
         #region Node Access Methods
+        public IReadOnlyList<RoadNode> GetNodes() => _nodes.ToArray();
+
         public void AddNode(RoadNode node)
         {
             if (TryGetNode(node.Id, out _))
